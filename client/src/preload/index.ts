@@ -1,8 +1,24 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  // サーバー制御
+  server: {
+    setUrl: (url: string) => ipcRenderer.invoke('server:setUrl', url),
+    checkConnection: () => ipcRenderer.invoke('server:checkConnection'),
+    getStatus: () => ipcRenderer.invoke('server:status'),
+    onStatusChange: (callback: (status: any) => void) => {
+      ipcRenderer.on('server-status-changed', (_event, status) => callback(status))
+      return () => ipcRenderer.removeAllListeners('server-status-changed')
+    }
+  },
+  // YouTube制御
+  youtube: {
+    start: (liveId: string) => ipcRenderer.invoke('youtube:start', liveId),
+    stop: () => ipcRenderer.invoke('youtube:stop')
+  }
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

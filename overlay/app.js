@@ -1,5 +1,18 @@
-// バックエンドのURL（ローカル開発時）
-const BACKEND_URL = 'http://localhost:3000';
+// バックエンドのURLを動的に取得
+// URLパラメータから取得、または現在のホストから推測
+function getBackendUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const wsUrl = params.get('ws');
+  if (wsUrl) {
+    return wsUrl;
+  }
+  
+  // 現在のホストから推測（例: http://localhost:3000/overlay/index.html → http://localhost:3000）
+  const currentHost = window.location.origin;
+  return currentHost;
+}
+
+const BACKEND_URL = getBackendUrl();
 
 // 表示するコメントの最大数
 const MAX_COMMENTS = 8;
