@@ -4,6 +4,11 @@ node_modules/
 # Build output
 dist/
 build/
+out/
+
+# Client build outputs
+client/out/
+client/dist/
 
 # Environment files
 .env
