@@ -6,6 +6,20 @@ import { ServerService } from './services/ServerService'
 import { BrainService } from './services/BrainService'
 import icon from '../../resources/icon.png?asset'
 
+/**
+ * Electron起動時の環境によっては標準出力/ロケールがUTF-8でなく、ログが文字化けすることがある。
+ * 可能な範囲でUTF-8に寄せる（既存環境が正しい場合は上書きしない）。
+ */
+function ensureUtf8Console(): void {
+  process.env.LC_ALL ??= 'C.UTF-8'
+  process.env.LANG ??= 'C.UTF-8'
+
+  const stdout = process.stdout as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
+  const stderr = process.stderr as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
+  stdout.setDefaultEncoding?.('utf8')
+  stderr.setDefaultEncoding?.('utf8')
+}
+
 // グローバル変数でサービスを保持
 let serverService: ServerService | null = null
 let youtubeService: YoutubeService | null = null
@@ -56,6 +70,7 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  ensureUtf8Console()
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 

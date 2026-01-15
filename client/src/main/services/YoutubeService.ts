@@ -8,6 +8,30 @@ export class YoutubeService {
   // 画面（Renderer）にデータを送るために Window を受け取る
   constructor(private mainWindow: BrowserWindow) {}
 
+  /**
+   * `youtube-chat` 側で稀にUTF-8文字列がlatin1扱いになり、`ã“` のような文字化けになることがあるため、
+   * それっぽいケースだけ復元を試みる（正常系は絶対に壊さない）。
+   */
+  private fixUtf8MojibakeIfNeeded(input: string): string {
+    // 既に日本語を含むなら変換しない（latin1変換はUnicodeを壊す可能性がある）
+    if (this.countJapaneseLikeChars(input) > 0) return input;
+
+    // 文字化けしがちな文字（UTF-8バイト列がlatin1解釈された時に出やすい）を含まないなら触らない
+    if (!/[ÃÂãâêîôû]/.test(input)) return input;
+
+    const decoded = Buffer.from(input, 'latin1').toString('utf8');
+    // 復元後に日本語が増えていて、置換文字が少ない（= 変換が成功している）場合のみ採用
+    if (this.countJapaneseLikeChars(decoded) > 0 && !decoded.includes('�')) {
+      return decoded;
+    }
+    return input;
+  }
+
+  private countJapaneseLikeChars(input: string): number {
+    // ひらがな・カタカナ・漢字・全角記号あたりをざっくり数える
+    return (input.match(/[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/g) ?? []).length;
+  }
+
   private isTextMessage(item: unknown): item is { text: string } {
     return typeof item === 'object' && item !== null && 'text' in item && typeof (item as { text: unknown }).text === 'string';
   }
@@ -27,13 +51,16 @@ export class YoutubeService {
     });
 
     this.liveChat.on('chat', (chatItem) => {
-      const messageText = this.getMessageText(chatItem.message);
+      const rawAuthorName = chatItem.author.name;
+      const rawMessageText = this.getMessageText(chatItem.message);
+      const authorName = this.fixUtf8MojibakeIfNeeded(rawAuthorName);
+      const messageText = this.fixUtf8MojibakeIfNeeded(rawMessageText);
       // 受信したコメントをコンソールに表示
-      console.log(`[Comment] ${chatItem.author.name}: ${messageText}`);
+      console.log(`[Comment] ${authorName}: ${messageText}`);
 
       this.mainWindow.webContents.send('new-comment', {
         id: chatItem.id,
-        name: chatItem.author.name,
+        name: authorName,
         text: messageText,
         avatar: chatItem.author.thumbnail?.url
       });
