@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import hark from 'hark'
+import { evaluateAiReplyDecision } from './utils/aiReplyFilter'
 
 // 1. 受信するデータの型を定義
 interface GayaSettings {
@@ -21,6 +23,12 @@ interface ServerStatus {
   lastChecked: number | null
 }
 type AiProvider = 'openai' | 'gemini';
+
+const AI_COOLDOWN_MS = 60000;
+const AI_REPLY_CHANCE = 0.5;
+const VAD_THRESHOLD = -50;
+const VAD_INTERVAL_MS = 100;
+const VAD_HISTORY = 10;
 function Dashboard(): React.JSX.Element {
   const [settings, setSettings] = useState<GayaSettings | null>(null);
   const [comments, setComments] = useState<Comment[]>([])
@@ -38,9 +46,11 @@ function Dashboard(): React.JSX.Element {
   const [apiKey, setApiKey] = useState('');
   const [isAiSaved, setIsAiSaved] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const lastReplyTimeRef = useRef(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const speechEventsRef = useRef<ReturnType<typeof hark> | null>(null);
+  const isAutoListeningRef = useRef(false);
 
   // サーバー状態を取得
   useEffect(() => {
@@ -211,124 +221,138 @@ function Dashboard(): React.JSX.Element {
     }
   };
   
-  // 録音開始処理（共通）
-  const startRecording = useCallback(async () => {
-    if (isListening) return; // 既に録音中なら何もしない
+  const startAutoListening = useCallback(async () => {
+    if (isListening) return;
+    if (!window.api?.ai) {
+      alert('APIが利用できません。アプリを再起動してください。');
+      return;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      
-      // 停止時にデータを送信するイベント（完全なWebMファイルを取得）
-      recorder.ondataavailable = async (e) => {
-        if (e.data.size > 0) {
-          const buffer = await e.data.arrayBuffer();
-          // メインプロセスに送信！
-          console.log(`🎤 音声データ送信: ${(buffer.byteLength / 1024).toFixed(2)}KB`);
+      streamRef.current = stream;
+
+      const speechEvents = hark(stream, {
+        threshold: VAD_THRESHOLD,
+        interval: VAD_INTERVAL_MS,
+        history: VAD_HISTORY
+      });
+      speechEventsRef.current = speechEvents;
+
+      speechEvents.on('speaking', () => {
+        if (!streamRef.current) return;
+        if (mediaRecorderRef.current?.state === 'recording') return;
+
+        console.log('🗣️ 感知開始');
+        const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = async () => {
+          if (!isAutoListeningRef.current) return;
+          if (chunks.length === 0) return;
+
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          if (blob.size === 0) return;
+
+          const buffer = await blob.arrayBuffer();
+          const now = Date.now();
+          const decision = evaluateAiReplyDecision({
+            now,
+            lastReplyTime: lastReplyTimeRef.current,
+            cooldownMs: AI_COOLDOWN_MS,
+            replyChance: AI_REPLY_CHANCE,
+            randomValue: Math.random()
+          });
+
+          if (!decision.allow) {
+            if (decision.reason === 'cooldown') {
+              console.log('🤫 AIはクールダウン中なので無視しました');
+            } else {
+              console.log('🎲 AIは気まぐれにスルーしました');
+            }
+            return;
+          }
+
+          console.log(`🚀 音声データ送信: ${(buffer.byteLength / 1024).toFixed(2)}KB`);
           try {
             const result = await (window.api.ai.processAudio(buffer) as unknown) as { text: string; gaya: string } | null;
             if (result !== null && typeof result === 'object' && 'text' in result && 'gaya' in result) {
               console.log(`✅ 処理完了: "${result.text}" → "${result.gaya}"`);
+              lastReplyTimeRef.current = now;
             } else {
               console.log('⚠️ 無音または雑音のためスキップ');
             }
           } catch (error) {
             console.error('❌ 音声処理エラー:', error);
           }
+        };
+
+        recorder.start();
+        mediaRecorderRef.current = recorder;
+      });
+
+      speechEvents.on('stopped_speaking', () => {
+        console.log('🛑 感知終了 -> 送信判定へ');
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
         }
-      };
+      });
 
-      // 停止時の処理
-      recorder.onstop = () => {
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      // 引数なしでstart（stop()を呼んだ時に完全なデータを取得）
-      recorder.start(); 
-      setMediaRecorder(recorder);
-      setAudioStream(stream);
+      isAutoListeningRef.current = true;
       setIsListening(true);
-      
     } catch (err) {
       console.error('マイクの取得に失敗:', err);
       alert('マイクの使用を許可してください');
+      isAutoListeningRef.current = false;
+      setIsListening(false);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     }
   }, [isListening]);
 
-  // 録音停止処理（共通）
-  const stopRecording = useCallback(() => {
-    if (!isListening) return; // 録音中でなければ何もしない
+  const stopAutoListening = useCallback(() => {
+    if (!isListening) return;
 
-    setMediaRecorder((currentRecorder) => {
-      if (currentRecorder) {
-        currentRecorder.stop();
-        currentRecorder.stream.getTracks().forEach(track => track.stop());
-      }
-      return null;
-    });
-    setAudioStream((currentStream) => {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-      return null;
-    });
+    isAutoListeningRef.current = false;
     setIsListening(false);
+
+    if (speechEventsRef.current) {
+      speechEventsRef.current.stop();
+      speechEventsRef.current = null;
+    }
+
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
   }, [isListening]);
 
-  // 録音開始/停止ボタンの処理
   const toggleListening = async () => {
     if (isListening) {
-      stopRecording();
+      stopAutoListening();
     } else {
-      await startRecording();
+      await startAutoListening();
     }
   };
 
-  // スペースキーで録音制御
-  useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // スペースキーが押された時（入力欄にフォーカスがある場合は無視）
-      const target = e.target as HTMLElement;
-      if (e.code === 'Space' && target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-        e.preventDefault(); // ページスクロールを防ぐ
-        if (!isSpacePressed && !isListening) {
-          setIsSpacePressed(true);
-          await startRecording();
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      // スペースキーが離された時
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (isSpacePressed && isListening) {
-          setIsSpacePressed(false);
-          stopRecording();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [isListening, isSpacePressed, startRecording, stopRecording]);
-
-  // コンポーネントのアンマウント時にストリームをクリーンアップ
   useEffect(() => {
     return () => {
-      if (audioStream) {
-        audioStream.getTracks().forEach(track => track.stop());
-      }
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
+      if (isAutoListeningRef.current) {
+        stopAutoListening();
       }
     };
-  }, [audioStream, mediaRecorder]);
+  }, [stopAutoListening]);
 
   return (
     <div style={{ 
@@ -674,19 +698,19 @@ function Dashboard(): React.JSX.Element {
         )}
       </div>
       <button 
-          onClick={toggleListening}
-          style={{
-            background: isListening ? '#ff4444' : '#4caf50',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 'bold'
-          }}
-        >
-          {isListening ? '🛑 聞き耳停止' : '👂 聞き耳開始'}
-        </button>
+        onClick={toggleListening}
+        style={{
+          background: isListening ? '#ff4444' : '#4caf50',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 6,
+          cursor: 'pointer',
+          fontSize: 14,
+          fontWeight: 'bold'
+        }}
+      >
+        {isListening ? '🛑 聞き耳停止' : '👂 自動聞き耳開始'}
+      </button>
     </div>
   )
 }
