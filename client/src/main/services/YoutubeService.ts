@@ -1,12 +1,16 @@
 // src/main/services/YoutubeService.ts
 import { LiveChat } from 'youtube-chat';
 import { BrowserWindow } from 'electron';
+import { WebSocketService } from './WebSocketService';
+import { CommentPayload } from '../types/comment';
 
 export class YoutubeService {
   private liveChat: LiveChat | null = null;
   
-  // 画面（Renderer）にデータを送るために Window を受け取る
-  constructor(private mainWindow: BrowserWindow) {}
+  constructor(
+    private mainWindow: BrowserWindow,
+    private webSocketService?: WebSocketService
+  ) {}
 
   private isTextMessage(item: unknown): item is { text: string } {
     return typeof item === 'object' && item !== null && 'text' in item && typeof (item as { text: unknown }).text === 'string';
@@ -31,12 +35,22 @@ export class YoutubeService {
       // 受信したコメントをコンソールに表示
       console.log(`[Comment] ${chatItem.author.name}: ${messageText}`);
 
-      this.mainWindow.webContents.send('new-comment', {
+      const comment: CommentPayload = {
         id: chatItem.id,
         name: chatItem.author.name,
         text: messageText,
-        avatar: chatItem.author.thumbnail?.url
-      });
+        isGaya: false,
+        avatarUrl: chatItem.author.thumbnail?.url,
+        timestamp: Date.now()
+      };
+
+      // ElectronアプリのUIに送信
+      this.mainWindow.webContents.send('new-comment', comment);
+
+      // WebSocketでオーバーレイに配信
+      if (this.webSocketService) {
+        this.webSocketService.broadcastComment(comment);
+      }
     });
 
     this.liveChat.on('error', (err) => {
