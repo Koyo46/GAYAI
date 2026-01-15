@@ -4,7 +4,7 @@ import { CommentPayload } from '../types/comment'
 export class BrainService {
   private mainWindow: BrowserWindow | null = null
   private gayaInterval: NodeJS.Timeout | null = null
-  
+
   private readonly phrases = ['草', 'www', '88888', '天才か？', 'なるほどね', 'きたあああ']
 
   constructor(mainWindow: BrowserWindow) {
@@ -12,11 +12,11 @@ export class BrainService {
     this.startGayaLoop()
   }
 
-  private startGayaLoop() {
+  private startGayaLoop(): void {
     // 5〜15秒のランダムな間隔でガヤを飛ばす
-    const nextInterval = () => Math.floor(Math.random() * 10000) + 5000
+    const nextInterval = (): number => Math.floor(Math.random() * 10000) + 5000
 
-    const tick = () => {
+    const tick = (): void => {
       this.gayaInterval = setTimeout(() => {
         this.emitGaya()
         tick()
@@ -25,7 +25,7 @@ export class BrainService {
     tick()
   }
 
-  private emitGaya() {
+  private emitGaya(): void {
     const text = this.phrases[Math.floor(Math.random() * this.phrases.length)]
     const payload: CommentPayload = {
       id: `gaya-${Date.now()}`,
@@ -33,7 +33,7 @@ export class BrainService {
       text: text,
       isGaya: true, // ここが重要
       timestamp: Date.now(),
-      avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=GAYAI', // 仮のAIアイコン
+      avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=GAYAI' // 仮のAIアイコン
     }
 
     // Rendererプロセスにガヤを送信
@@ -46,7 +46,7 @@ export class BrainService {
   /**
    * ガヤ生成を停止
    */
-  stop() {
+  stop(): void {
     if (this.gayaInterval) {
       clearTimeout(this.gayaInterval)
       this.gayaInterval = null

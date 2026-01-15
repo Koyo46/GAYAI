@@ -43,7 +43,7 @@ export class YoutubeService {
       .join('');
   }
 
-  private setupEventHandlers() {
+  private setupEventHandlers(): void {
     if (!this.liveChat) return;
 
     this.liveChat.on('start', (id) => {
@@ -75,7 +75,7 @@ export class YoutubeService {
     });
   }
 
-  public async start(liveId: string) {
+  public async start(liveId: string): Promise<void> {
     console.log(`Starting chat listener for liveId: ${liveId}`);
     
     this.liveChat = new LiveChat({ liveId });
@@ -90,7 +90,7 @@ export class YoutubeService {
     }
   }
 
-  public async startWithChannelId(channelId: string) {
+  public async startWithChannelId(channelId: string): Promise<void> {
     console.log(`Starting chat listener for channelId: ${channelId}`);
     
     this.liveChat = new LiveChat({ channelId });
@@ -104,7 +104,7 @@ export class YoutubeService {
     }
   }
 
-  public stop() {
+  public stop(): void {
     this.liveChat?.stop();
   }
 }
