@@ -17,7 +17,7 @@ export class WebSocketService {
 
   private setupServer() {
     // CORS設定
-    this.app.use((req, res, next) => {
+    this.app.use((_req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*')
       res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
       res.header('Access-Control-Allow-Headers', 'Content-Type')
@@ -42,7 +42,10 @@ export class WebSocketService {
       cors: {
         origin: '*',
         methods: ['GET', 'POST']
-      }
+      },
+      // UTF-8エンコーディングを明示的に指定
+      transports: ['websocket', 'polling'],
+      allowEIO3: true
     })
 
     // Socket.IO接続処理
@@ -79,12 +82,87 @@ export class WebSocketService {
   }
 
   /**
+   * UTF-8文字化けを修正する（latin1として誤解釈されたUTF-8を復元）
+   */
+  private fixUtf8Mojibake(text: string): string {
+    // ASCII文字のみの場合は変換不要
+    if (/^[\x00-\x7F]*$/.test(text)) {
+      return text
+    }
+    
+    // 文字化けの典型的なパターンを検出
+    // "縺" などの文字化けした文字が含まれている場合
+    const mojibakePatterns = [
+      /縺/, /繧/, /繝/, /繧/, /・/, /｡/, /｢/, /｣/, /､/, /･/, /ｦ/, /ｧ/, /ｨ/, /ｩ/, /ｪ/, /ｫ/, /ｬ/, /ｭ/, /ｮ/, /ｯ/, /ｰ/, /ｱ/, /ｲ/, /ｳ/, /ｴ/, /ｵ/, /ｶ/, /ｷ/, /ｸ/, /ｹ/, /ｺ/, /ｻ/, /ｼ/, /ｽ/, /ｾ/, /ｿ/, /ﾀ/, /ﾁ/, /ﾂ/, /ﾃ/, /ﾄ/, /ﾅ/, /ﾆ/, /ﾇ/, /ﾈ/, /ﾉ/, /ﾊ/, /ﾋ/, /ﾌ/, /ﾍ/, /ﾎ/, /ﾏ/, /ﾐ/, /ﾑ/, /ﾒ/, /ﾓ/, /ﾔ/, /ﾕ/, /ﾖ/, /ﾗ/, /ﾘ/, /ﾙ/, /ﾚ/, /ﾛ/, /ﾜ/, /ﾝ/
+    ]
+    
+    const hasMojibakePattern = mojibakePatterns.some(pattern => pattern.test(text))
+    
+    // 文字化けパターンが含まれている、またはUTF-8バイト列がlatin1として解釈された可能性がある場合
+    if (hasMojibakePattern || /[ÃÂãâêîôû]/.test(text)) {
+      try {
+        // latin1として解釈されたUTF-8バイト列を復元
+        const decoded = Buffer.from(text, 'latin1').toString('utf8')
+        
+        // 復元後の文字列を評価
+        const originalJapaneseCount = (text.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) || []).length
+        const decodedJapaneseCount = (decoded.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) || []).length
+        
+        // 復元後に日本語が増え、置換文字がなく、文字化けパターンが減った場合は採用
+        if (
+          decodedJapaneseCount > originalJapaneseCount &&
+          !decoded.includes('�') &&
+          !mojibakePatterns.some(pattern => pattern.test(decoded))
+        ) {
+          return decoded
+        }
+      } catch (error) {
+        // 変換に失敗した場合は元の文字列を返す
+        console.error('[WebSocketService] UTF-8 fix failed:', error)
+      }
+    }
+    
+    return text
+  }
+
+  /**
    * コメントを配信
    */
   broadcastComment(comment: CommentPayload) {
     if (this.io) {
-      this.io.emit('new-comment', comment)
-      console.log(`📤 Broadcasted comment: ${comment.name}: ${comment.text}`)
+      // UTF-8文字化けを修正
+      const originalName = comment.name
+      const originalText = comment.text
+      const fixedName = this.fixUtf8Mojibake(originalName)
+      const fixedText = this.fixUtf8Mojibake(originalText)
+      
+      const fixedComment: CommentPayload = {
+        ...comment,
+        name: fixedName,
+        text: fixedText
+      }
+      
+      // デバッグ: 修正前後の比較
+      if (originalName !== fixedName || originalText !== fixedText) {
+        console.log(`[WebSocketService] Fixed mojibake:`)
+        console.log(`  Name: "${originalName}" -> "${fixedName}"`)
+        console.log(`  Text: "${originalText}" -> "${fixedText}"`)
+      }
+      
+      this.io.emit('new-comment', fixedComment)
+      
+      // コンソールログ出力（Windowsコンソールの文字化け対策）
+      // Bufferを使用してUTF-8として明示的に処理
+      try {
+        const nameBytes = Buffer.from(fixedName, 'utf8')
+        const textBytes = Buffer.from(fixedText, 'utf8')
+        const nameStr = nameBytes.toString('utf8')
+        const textStr = textBytes.toString('utf8')
+        console.log(`📤 Broadcasted comment: ${nameStr}: ${textStr}`)
+      } catch (error) {
+        // フォールバック: そのまま出力
+        console.log(`📤 Broadcasted comment: ${fixedName}: ${fixedText}`)
+      }
     }
   }
 

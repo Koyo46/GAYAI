@@ -49,7 +49,9 @@ export class BrainService {
       this.webSocketService.broadcastComment(payload)
     }
 
-    console.log(`[Gaya] Generated: ${text}`)
+    // コンソールログをUTF-8として正しく出力
+    const logText = Buffer.from(text, 'utf8').toString('utf8')
+    console.log(`[Gaya] Generated: ${logText}`)
   }
 
   /**

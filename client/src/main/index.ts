@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { execSync } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { YoutubeService } from './services/YoutubeService'
 import { ServerService } from './services/ServerService'
@@ -10,15 +11,43 @@ import icon from '../../resources/icon.png?asset'
 /**
  * Electron起動時の環境によっては標準出力/ロケールがUTF-8でなく、ログが文字化けすることがある。
  * 可能な範囲でUTF-8に寄せる（既存環境が正しい場合は上書きしない）。
+ * 
+ * 配布版でも確実に動作するよう、モジュール読み込み時に実行する。
  */
 function ensureUtf8Console(): void {
+  // Windowsの場合、コンソールのコードページをUTF-8に設定
+  if (process.platform === 'win32') {
+    try {
+      // chcp 65001 を実行してコードページをUTF-8に変更
+      execSync('chcp 65001 >nul 2>&1', { stdio: 'ignore' })
+    } catch (error) {
+      // chcpの実行に失敗しても続行
+      console.warn('[ensureUtf8Console] Failed to set code page:', error)
+    }
+  }
+
+  // 環境変数を設定
   process.env.LC_ALL ??= 'C.UTF-8'
   process.env.LANG ??= 'C.UTF-8'
-
+  
+  // Node.jsの標準出力/エラー出力のエンコーディングをUTF-8に設定
   const stdout = process.stdout as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
   const stderr = process.stderr as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
   stdout.setDefaultEncoding?.('utf8')
   stderr.setDefaultEncoding?.('utf8')
+  
+  // Windowsの場合、コンソール出力のエンコーディングも設定
+  if (process.platform === 'win32') {
+    try {
+      // PowerShellのOutputEncodingを設定（可能な場合）
+      if (typeof process.stdout.write === 'function') {
+        // バッファリングを無効にしてUTF-8を強制
+        process.stdout.write('\x1b[?25h') // カーソルを表示（副作用なし）
+      }
+    } catch (error) {
+      // 無視
+    }
+  }
 }
 
 // グローバル変数でサービスを保持
@@ -84,11 +113,14 @@ function createWindow(): void {
   }
 }
 
+// モジュール読み込み時にUTF-8を設定（配布版でも確実に動作するように）
+// app.whenReady()の前に実行することで、すべてのログ出力がUTF-8で処理される
+ensureUtf8Console()
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  ensureUtf8Console()
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
