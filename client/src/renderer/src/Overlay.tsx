@@ -17,6 +17,7 @@ export default function Overlay() {
   useEffect(() => {
     // 接続
     const socket = io(SOCKET_URL);
+    const timeouts: Map<string, NodeJS.Timeout> = new Map(); // タイマーを管理
 
     socket.on('connect', () => {
       console.log('Overlay Connected to Socket Server');
@@ -24,15 +25,37 @@ export default function Overlay() {
 
     socket.on('new-comment', (comment: Comment) => {
       console.log('Overlay Received:', comment);
-      setComments((prev) => [...prev, comment]);
       
-      // (オプション) 10秒後に消す
-      setTimeout(() => {
-        setComments((current) => current.filter(c => c.id !== comment.id));
-      }, 10000);
+      // 既存のタイマーがあればクリア
+      const existingTimeout = timeouts.get(comment.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      
+      // コメントを追加
+      setComments((prev) => {
+        // 既に同じIDのコメントがあれば削除してから追加（重複防止）
+        const filtered = prev.filter(c => c.id !== comment.id);
+        return [...filtered, comment];
+      });
+      
+      // 15秒後に消す（タイマーを保存）
+      const timeoutId = setTimeout(() => {
+        setComments((current) => {
+          const filtered = current.filter(c => c.id !== comment.id);
+          // タイマーを削除
+          timeouts.delete(comment.id);
+          return filtered;
+        });
+      }, 15000); // 10秒から15秒に延長
+      
+      timeouts.set(comment.id, timeoutId);
     });
 
     return () => {
+      // すべてのタイマーをクリア
+      timeouts.forEach((timeout) => clearTimeout(timeout));
+      timeouts.clear();
       socket.disconnect();
     };
   }, []);

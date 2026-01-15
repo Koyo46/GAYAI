@@ -21,6 +21,7 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@deepgram/sdk": "^3.7.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@google/generative-ai": "^0.24.1",

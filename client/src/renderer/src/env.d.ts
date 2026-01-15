@@ -37,6 +37,7 @@ interface Window {
     // 3. ★今回追加したAI関連
     ai: {
       saveSettings: (provider: 'openai' | 'gemini', apiKey: string) => Promise<boolean>
+      processAudio: (buffer: ArrayBuffer) => Promise<boolean>;
     }
   }
 }

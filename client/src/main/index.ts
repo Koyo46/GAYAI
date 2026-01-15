@@ -205,6 +205,62 @@ app.whenReady().then(() => {
   })
 })
 
+// ★IPCハンドラ追加: 音声データを受け取る
+ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => {
+  // サービスが初期化されているかチェック
+  if (!aiService) {
+    console.error('❌ AiService is not initialized');
+    return { error: 'AiService is not initialized' };
+  }
+
+  if (!webSocketService) {
+    console.error('❌ WebSocketService is not initialized');
+    return { error: 'WebSocketService is not initialized' };
+  }
+
+  const windows = BrowserWindow.getAllWindows();
+  const mainWindow = windows.length > 0 ? windows[0] : null;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.error('❌ Main window is not available');
+    return { error: 'Main window is not available' };
+  }
+
+  // 1. 文字起こし (Deepgram)
+  console.log(`👂 音声処理開始: ${(_arrayBuffer.byteLength / 1024).toFixed(2)}KB`);
+  const buffer = Buffer.from(_arrayBuffer);
+  const text = await aiService.transcribeAudio(buffer);
+  
+  if (!text || text.length < 2) {
+    console.log('⚠️ 無音または雑音のためスキップ');
+    return null;
+  }
+  console.log(`🗣️ 認識結果: "${text}"`);
+
+  // 2. ガヤ生成 (Gemini or GPT)
+  // Laravelから取得済みのキャラ設定があればそれを使う（簡易的に固定文言でテスト）
+  const systemPrompt = "あなたは配信者の友人です。配信者の独り言に対して、面白おかしく相槌やツッコミを配信にコメントする形で一言入れてください。";
+  console.log('🧠 ガヤ生成中...');
+  const gaya = await aiService.generateGaya(systemPrompt, text);
+  console.log(`💬 ガヤ生成完了: "${gaya}"`);
+  
+  // 3. オーバーレイに送信！
+  const payload = {
+    id: `ai-${Date.now()}`,
+    name: 'GAYAI (AI)',
+    text: gaya, // ガヤを表示
+    isGaya: true,
+    avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+    timestamp: Date.now()
+  };
+
+  // メインウィンドウとオーバーレイに送信
+  console.log('📤 コメント配信:', payload.text);
+  mainWindow.webContents.send('new-comment', payload);
+  webSocketService.broadcastComment(payload);
+
+  return { text, gaya };
+});
+
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.

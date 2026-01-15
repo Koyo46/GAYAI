@@ -23,6 +23,7 @@ declare global {
       }
       ai: {
         saveSettings: (provider: string, apiKey: string) => Promise<boolean>
+        processAudio: (arrayBuffer: ArrayBuffer) => Promise<{ text: string; gaya: string } | null>
       }
     }
   }

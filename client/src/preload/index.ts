@@ -21,7 +21,9 @@ const api = {
   // AI設定
   ai: {
     saveSettings: (provider: string, apiKey: string) => 
-      ipcRenderer.invoke('ai:save-settings', provider, apiKey)
+      ipcRenderer.invoke('ai:save-settings', provider, apiKey),
+    processAudio: (arrayBuffer: ArrayBuffer) =>
+      ipcRenderer.invoke('ai:process-audio', arrayBuffer) as Promise<{ text: string; gaya: string } | null>
   }
 }
 

@@ -12,7 +12,8 @@ export class BrainService {
   constructor(mainWindow: BrowserWindow, webSocketService?: WebSocketService) {
     this.mainWindow = mainWindow
     this.webSocketService = webSocketService
-    this.startGayaLoop()
+    // 固定文言のガヤ生成を一時的に無効化
+    // this.startGayaLoop()
   }
 
   private startGayaLoop(): void {

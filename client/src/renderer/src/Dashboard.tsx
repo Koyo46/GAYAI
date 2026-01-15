@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 // 1. 受信するデータの型を定義
 interface GayaSettings {
@@ -37,6 +37,10 @@ function Dashboard(): React.JSX.Element {
   const [aiProvider, setAiProvider] = useState<AiProvider>('gemini');
   const [apiKey, setApiKey] = useState('');
   const [isAiSaved, setIsAiSaved] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
 
   // サーバー状態を取得
   useEffect(() => {
@@ -206,6 +210,125 @@ function Dashboard(): React.JSX.Element {
       alert('設定の保存に失敗しました');
     }
   };
+  
+  // 録音開始処理（共通）
+  const startRecording = useCallback(async () => {
+    if (isListening) return; // 既に録音中なら何もしない
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      // 停止時にデータを送信するイベント（完全なWebMファイルを取得）
+      recorder.ondataavailable = async (e) => {
+        if (e.data.size > 0) {
+          const buffer = await e.data.arrayBuffer();
+          // メインプロセスに送信！
+          console.log(`🎤 音声データ送信: ${(buffer.byteLength / 1024).toFixed(2)}KB`);
+          try {
+            const result = await (window.api.ai.processAudio(buffer) as unknown) as { text: string; gaya: string } | null;
+            if (result !== null && typeof result === 'object' && 'text' in result && 'gaya' in result) {
+              console.log(`✅ 処理完了: "${result.text}" → "${result.gaya}"`);
+            } else {
+              console.log('⚠️ 無音または雑音のためスキップ');
+            }
+          } catch (error) {
+            console.error('❌ 音声処理エラー:', error);
+          }
+        }
+      };
+
+      // 停止時の処理
+      recorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      // 引数なしでstart（stop()を呼んだ時に完全なデータを取得）
+      recorder.start(); 
+      setMediaRecorder(recorder);
+      setAudioStream(stream);
+      setIsListening(true);
+      
+    } catch (err) {
+      console.error('マイクの取得に失敗:', err);
+      alert('マイクの使用を許可してください');
+    }
+  }, [isListening]);
+
+  // 録音停止処理（共通）
+  const stopRecording = useCallback(() => {
+    if (!isListening) return; // 録音中でなければ何もしない
+
+    setMediaRecorder((currentRecorder) => {
+      if (currentRecorder) {
+        currentRecorder.stop();
+        currentRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+      return null;
+    });
+    setAudioStream((currentStream) => {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      return null;
+    });
+    setIsListening(false);
+  }, [isListening]);
+
+  // 録音開始/停止ボタンの処理
+  const toggleListening = async () => {
+    if (isListening) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
+  // スペースキーで録音制御
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // スペースキーが押された時（入力欄にフォーカスがある場合は無視）
+      const target = e.target as HTMLElement;
+      if (e.code === 'Space' && target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+        e.preventDefault(); // ページスクロールを防ぐ
+        if (!isSpacePressed && !isListening) {
+          setIsSpacePressed(true);
+          await startRecording();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // スペースキーが離された時
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isSpacePressed && isListening) {
+          setIsSpacePressed(false);
+          stopRecording();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isListening, isSpacePressed, startRecording, stopRecording]);
+
+  // コンポーネントのアンマウント時にストリームをクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    };
+  }, [audioStream, mediaRecorder]);
 
   return (
     <div style={{ 
@@ -550,6 +673,20 @@ function Dashboard(): React.JSX.Element {
           </div>
         )}
       </div>
+      <button 
+          onClick={toggleListening}
+          style={{
+            background: isListening ? '#ff4444' : '#4caf50',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 'bold'
+          }}
+        >
+          {isListening ? '🛑 聞き耳停止' : '👂 聞き耳開始'}
+        </button>
     </div>
   )
 }
