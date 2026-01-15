@@ -29,7 +29,7 @@ function App(): React.JSX.Element {
 
   // サーバー状態を取得
   useEffect(() => {
-    const loadStatus = async () => {
+    const loadStatus = async (): Promise<void> => {
       const status = await window.api.server.getStatus()
       setServerStatus(status)
       if (status.serverUrl) {
@@ -50,7 +50,7 @@ function App(): React.JSX.Element {
 
   // コメント受信
   useEffect(() => {
-    const handleNewComment = (_event: unknown, comment: Comment) => {
+    const handleNewComment = (_event: unknown, comment: Comment): void => {
       console.log('📨 Received comment:', comment)
       setComments((prev) => [...prev, comment])
     }
@@ -63,7 +63,7 @@ function App(): React.JSX.Element {
   }, [])
 
   // サーバーURL設定
-  const handleSetServerUrl = async () => {
+  const handleSetServerUrl = async (): Promise<void> => {
     if (!serverUrlInput.trim()) {
       alert('サーバーURLを入力してください')
       return
@@ -88,7 +88,7 @@ function App(): React.JSX.Element {
   }
 
   // 接続テスト
-  const handleTestConnection = async () => {
+  const handleTestConnection = async (): Promise<void> => {
     setIsConnecting(true)
     try {
       const result = await window.api.server.checkConnection()
@@ -106,7 +106,7 @@ function App(): React.JSX.Element {
   }
 
   // YouTube配信開始
-  const handleStartYouTube = async () => {
+  const handleStartYouTube = async (): Promise<void> => {
     if (!liveId.trim()) {
       alert('ライブIDを入力してください')
       return
@@ -126,7 +126,7 @@ function App(): React.JSX.Element {
   }
 
   // URLをクリップボードにコピー
-  const handleCopyUrl = async () => {
+  const handleCopyUrl = async (): Promise<void> => {
     if (serverStatus.overlayUrl) {
       await navigator.clipboard.writeText(serverStatus.overlayUrl)
       setCopied(true)

@@ -8,7 +8,7 @@ const api = {
     setUrl: (url: string) => ipcRenderer.invoke('server:setUrl', url),
     checkConnection: () => ipcRenderer.invoke('server:checkConnection'),
     getStatus: () => ipcRenderer.invoke('server:status'),
-    onStatusChange: (callback: (status: any) => void) => {
+    onStatusChange: (callback: (status: unknown) => void) => {
       ipcRenderer.on('server-status-changed', (_event, status) => callback(status))
       return () => ipcRenderer.removeAllListeners('server-status-changed')
     }
