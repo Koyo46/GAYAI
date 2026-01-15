@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import hark from 'hark'
+import { evaluateAiReplyDecision } from './utils/aiReplyFilter'
 
 // 1. 受信するデータの型を定義
 interface GayaSettings {
@@ -259,14 +260,20 @@ function Dashboard(): React.JSX.Element {
 
           const buffer = await blob.arrayBuffer();
           const now = Date.now();
+          const decision = evaluateAiReplyDecision({
+            now,
+            lastReplyTime: lastReplyTimeRef.current,
+            cooldownMs: AI_COOLDOWN_MS,
+            replyChance: AI_REPLY_CHANCE,
+            randomValue: Math.random()
+          });
 
-          if (now - lastReplyTimeRef.current < AI_COOLDOWN_MS) {
-            console.log('🤫 AIはクールダウン中なので無視しました');
-            return;
-          }
-
-          if (Math.random() > AI_REPLY_CHANCE) {
-            console.log('🎲 AIは気まぐれにスルーしました');
+          if (!decision.allow) {
+            if (decision.reason === 'cooldown') {
+              console.log('🤫 AIはクールダウン中なので無視しました');
+            } else {
+              console.log('🎲 AIは気まぐれにスルーしました');
+            }
             return;
           }
 
