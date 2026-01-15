@@ -6,6 +6,7 @@ import { YoutubeService } from './services/YoutubeService'
 import { ServerService } from './services/ServerService'
 import { BrainService } from './services/BrainService'
 import { WebSocketService } from './services/WebSocketService'
+import { AiService } from './services/AiService'
 import icon from '../../resources/icon.png?asset'
 
 /**
@@ -53,6 +54,7 @@ function ensureUtf8Console(): void {
 // グローバル変数でサービスを保持
 let serverService: ServerService | null = null
 let webSocketService: WebSocketService | null = null
+let aiService: AiService | null = null
 let youtubeService: YoutubeService | null = null
 let brainService: BrainService | null = null
 
@@ -75,6 +77,15 @@ function createWindow(): void {
   webSocketService = new WebSocketService()
   youtubeService = new YoutubeService(mainWindow, webSocketService)
   brainService = new BrainService(mainWindow, webSocketService)
+  aiService = new AiService();
+
+  ipcMain.handle('ai:save-settings', (_event, provider, apiKey) => {
+    console.log(`🧠 AI設定を受信: ${provider}`);
+    if (aiService) {
+      aiService.configure(provider, apiKey);
+    }
+    return true; // 成功を返す
+  });
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

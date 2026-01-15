@@ -17,6 +17,11 @@ const api = {
   youtube: {
     start: (liveId: string) => ipcRenderer.invoke('youtube:start', liveId),
     stop: () => ipcRenderer.invoke('youtube:stop')
+  },
+  // AI設定
+  ai: {
+    saveSettings: (provider: string, apiKey: string) => 
+      ipcRenderer.invoke('ai:save-settings', provider, apiKey)
   }
 }
 

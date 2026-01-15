@@ -20,7 +20,7 @@ interface ServerStatus {
   overlayUrl: string | null
   lastChecked: number | null
 }
-
+type AiProvider = 'openai' | 'gemini';
 function Dashboard(): React.JSX.Element {
   const [settings, setSettings] = useState<GayaSettings | null>(null);
   const [comments, setComments] = useState<Comment[]>([])
@@ -34,6 +34,9 @@ function Dashboard(): React.JSX.Element {
   const [isConnecting, setIsConnecting] = useState(false)
   const [liveId, setLiveId] = useState('')
   const [copied, setCopied] = useState(false)
+  const [aiProvider, setAiProvider] = useState<AiProvider>('gemini');
+  const [apiKey, setApiKey] = useState('');
+  const [isAiSaved, setIsAiSaved] = useState(false);
 
   // サーバー状態を取得
   useEffect(() => {
@@ -178,6 +181,32 @@ function Dashboard(): React.JSX.Element {
     }
   }
 
+  // ★AI設定を保存する関数
+  const handleSaveAiSettings = async () => {
+    if (!apiKey.trim()) {
+      alert('APIキーを入力してください');
+      return;
+    }
+
+    if (!window.api?.ai) {
+      alert('APIが利用できません。アプリを再起動してください。');
+      return;
+    }
+
+    try {
+      const success = await window.api.ai.saveSettings(aiProvider, apiKey.trim());
+      if (success) {
+        setIsAiSaved(true);
+        alert(`✅ ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} の設定を保存しました！`);
+        // 3秒後に「保存済み」表示を消す演出
+        setTimeout(() => setIsAiSaved(false), 3000);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('設定の保存に失敗しました');
+    }
+  };
+
   return (
     <div style={{ 
       padding: 24, 
@@ -192,6 +221,74 @@ function Dashboard(): React.JSX.Element {
         <h1 style={{ margin: 0, marginBottom: 8, fontSize: 28 }}>GAYAI Client</h1>
         <div style={{ fontSize: 14, color: '#888' }}>
           YouTube配信のガヤAIサービス
+        </div>
+      </div>
+
+      <div style={{ 
+        background: '#2a2a2a', 
+        padding: 20, 
+        borderRadius: 12, 
+        marginBottom: 24,
+        border: '1px solid #444'
+      }}>
+        <h2 style={{ margin: 0, marginBottom: 16, fontSize: 18, display: 'flex', alignItems: 'center' }}>
+          🧠 AI頭脳設定
+          {isAiSaved && <span style={{ marginLeft: 10, fontSize: 12, color: '#4caf50' }}>✓ 保存完了</span>}
+        </h2>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          {/* AI切り替えプルダウン */}
+          <select
+            value={aiProvider}
+            onChange={(e) => setAiProvider(e.target.value as AiProvider)}
+            style={{
+              padding: '10px',
+              background: '#1a1a1a',
+              color: '#fff',
+              border: '1px solid #444',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            <option value="gemini">Gemini (推奨・無料枠大)</option>
+            <option value="openai">OpenAI (GPT-4o)</option>
+          </select>
+
+          {/* APIキー入力欄 */}
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={`${aiProvider === 'openai' ? 'sk-...' : 'AIza...'} キーを入力`}
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              background: '#1a1a1a',
+              color: '#fff',
+              border: '1px solid #444',
+              borderRadius: 6
+            }}
+          />
+
+          {/* 保存ボタン */}
+          <button
+            onClick={handleSaveAiSettings}
+            style={{
+              padding: '10px 20px',
+              background: '#9c27b0', // 紫色で「AI感」を出す
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            保存
+          </button>
+        </div>
+        
+        <div style={{ fontSize: 12, color: '#888' }}>
+          ※ アプリを再起動するとキーはリセットされます（セキュリティのため今は保存しません）
         </div>
       </div>
 

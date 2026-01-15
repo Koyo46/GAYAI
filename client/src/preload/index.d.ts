@@ -21,6 +21,9 @@ declare global {
         start: (liveId: string) => Promise<{ success: boolean; error?: string }>
         stop: () => Promise<{ success: boolean; error?: string }>
       }
+      ai: {
+        saveSettings: (provider: string, apiKey: string) => Promise<boolean>
+      }
     }
   }
 }
