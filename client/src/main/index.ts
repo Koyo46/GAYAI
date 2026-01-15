@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { YoutubeService } from './services/YoutubeService'
 import { ServerService } from './services/ServerService'
 import { BrainService } from './services/BrainService'
+import { WebSocketService } from './services/WebSocketService'
 import icon from '../../resources/icon.png?asset'
 
 /**
@@ -22,6 +23,7 @@ function ensureUtf8Console(): void {
 
 // グローバル変数でサービスを保持
 let serverService: ServerService | null = null
+let webSocketService: WebSocketService | null = null
 let youtubeService: YoutubeService | null = null
 let brainService: BrainService | null = null
 
@@ -41,14 +43,30 @@ function createWindow(): void {
 
   // サービスを初期化
   serverService = new ServerService(mainWindow)
-  youtubeService = new YoutubeService(mainWindow)
-  brainService = new BrainService(mainWindow)
+  webSocketService = new WebSocketService()
+  youtubeService = new YoutubeService(mainWindow, webSocketService)
+  brainService = new BrainService(mainWindow, webSocketService)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
     // 接続監視を開始
     if (serverService) {
       serverService.startConnectionMonitoring()
+    }
+    // WebSocketサーバーを起動
+    const wsService = webSocketService
+    if (wsService) {
+      wsService.start().then(() => {
+        console.log('✅ WebSocket server ready')
+        // オーバーレイURLを更新
+        if (serverService && wsService) {
+          const status = serverService.getStatus()
+          status.overlayUrl = wsService.getOverlayUrl()
+          serverService['notifyStatusChange']()
+        }
+      }).catch((error) => {
+        console.error('❌ Failed to start WebSocket server:', error)
+      })
     }
   })
 
@@ -93,8 +111,22 @@ app.whenReady().then(() => {
   // サーバー接続チェック
   ipcMain.handle('server:checkConnection', async () => {
     if (!serverService) return { success: false, error: 'Server service not initialized' }
-    const connected = await serverService.checkConnection()
-    return { success: connected }
+    try {
+      const connected = await serverService.checkConnection()
+      if (!connected) {
+        const status = serverService.getStatus()
+        return { 
+          success: false, 
+          error: `サーバーに接続できませんでした。URL: ${status.serverUrl || '未設定'}` 
+        }
+      }
+      return { success: true }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : '接続チェック中にエラーが発生しました' 
+      }
+    }
   })
 
   // サーバー状態取得
@@ -138,6 +170,9 @@ app.on('window-all-closed', () => {
   if (serverService) {
     serverService.cleanup()
   }
+  if (webSocketService) {
+    webSocketService.stop()
+  }
   if (youtubeService) {
     youtubeService.stop()
   }
@@ -154,6 +189,9 @@ app.on('before-quit', () => {
   // アプリ終了前にクリーンアップ
   if (serverService) {
     serverService.cleanup()
+  }
+  if (webSocketService) {
+    webSocketService.stop()
   }
   if (youtubeService) {
     youtubeService.stop()

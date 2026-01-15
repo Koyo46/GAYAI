@@ -41,7 +41,7 @@ export class ServerService {
         const config = JSON.parse(readFileSync(this.configPath, 'utf-8'))
         if (config.serverUrl) {
           this.status.serverUrl = config.serverUrl
-          this.status.overlayUrl = `${config.serverUrl}/overlay/index.html`
+          // オーバーレイURLは後でWebSocketServiceから設定される
           // 接続状態をチェック
           this.checkConnection()
         }
@@ -77,7 +77,8 @@ export class ServerService {
       }
 
       this.status.serverUrl = url
-      this.status.overlayUrl = `${url}/overlay/index.html`
+      // オーバーレイURLは後でWebSocketServiceから設定される
+      // ここでは設定しない（LaravelサーバーのURLではない）
       this.saveConfig()
 
       // 接続をチェック
@@ -104,23 +105,56 @@ export class ServerService {
       return false
     }
 
-    try {
-      const response = await fetch(`${this.status.serverUrl}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000) // 5秒タイムアウト
-      })
+    // 複数のエンドポイントを試す
+    const endpoints = [
+      '/health',
+      '/api/health',
+      '/',  // ルートパスも試す
+    ]
 
-      this.status.isConnected = response.ok
-      this.status.lastChecked = Date.now()
-      this.notifyStatusChange()
-      return response.ok
-    } catch (error) {
-      console.error('Connection check failed:', error)
-      this.status.isConnected = false
-      this.status.lastChecked = Date.now()
-      this.notifyStatusChange()
-      return false
+    for (const endpoint of endpoints) {
+      try {
+        const url = `${this.status.serverUrl}${endpoint}`
+        console.log(`[ServerService] Checking: ${url}`)
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000), // 5秒タイムアウト
+          headers: {
+            'Accept': 'application/json',
+          }
+        })
+
+        // 200-299 または 404でもサーバーが応答していると判断
+        if (response.status < 500) {
+          console.log(`[ServerService] ✅ Connected via ${endpoint} (status: ${response.status})`)
+          this.status.isConnected = true
+          this.status.lastChecked = Date.now()
+          this.notifyStatusChange()
+          return true
+        }
+      } catch (error) {
+        // ネットワークエラーの場合は次のエンドポイントを試す
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log(`[ServerService] ⏱️ Timeout on ${endpoint}`)
+        } else {
+          console.log(`[ServerService] ❌ Error on ${endpoint}:`, error)
+        }
+        continue
+      }
     }
+
+    // すべてのエンドポイントで失敗
+    console.error(`[ServerService] ❌ All connection attempts failed for ${this.status.serverUrl}`)
+    console.error('[ServerService] 確認事項:')
+    console.error('  1. Laravel Sailが起動しているか (./vendor/bin/sail up)')
+    console.error('  2. URLが正しいか (例: http://localhost)')
+    console.error('  3. ポート番号が必要な場合 (例: http://localhost:8000)')
+    console.error('  4. CORS設定が正しいか')
+    this.status.isConnected = false
+    this.status.lastChecked = Date.now()
+    this.notifyStatusChange()
+    return false
   }
 
   /**
