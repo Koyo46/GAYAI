@@ -1,13 +1,17 @@
 @import './base.css';
 
-body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background-image: url('./wavy-lines.svg');
-  background-size: cover;
-  user-select: none;
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: transparent !important; /* 重要 */
+  overflow: hidden; /* スクロールバーを出さない */
+}
+
+/* アプリのルート要素も透明に */
+#root {
+  background-color: transparent !important;
+  width: 100vw;
+  height: 100vh;
 }
 
 code {
@@ -24,14 +28,6 @@ code {
     Liberation Mono,
     monospace;
   font-size: 85%;
-}
-
-#root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  margin-bottom: 80px;
 }
 
 .logo {

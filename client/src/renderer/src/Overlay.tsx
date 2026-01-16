@@ -85,6 +85,7 @@ export default function Overlay() {
         justifyContent: 'flex-end', // 下から積み上げる
         color: STYLES.textColor,
         fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif',
+        pointerEvents: 'none', // ★重要: これでクリックが透過して背後のゲームを操作できます
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {comments.map((c) => (
