@@ -16,11 +16,27 @@ import icon from '../../resources/icon.png?asset'
  */
 function loadEnvFile(): void {
   try {
-    const envPath = join(__dirname, '../../../../.env')
-    if (existsSync(envPath)) {
+    // 複数のパスを試す（開発環境と本番環境に対応）
+    const possiblePaths = [
+      join(__dirname, '../../../../.env'),  // ビルド後: client/out/main/ から見たパス
+      join(process.cwd(), '.env'),          // カレントディレクトリ
+      join(app.getAppPath(), '..', '.env'), // アプリのパスから
+    ]
+    
+    let envPath: string | null = null
+    for (const path of possiblePaths) {
+      if (existsSync(path)) {
+        envPath = path
+        break
+      }
+    }
+    
+    if (envPath) {
+      console.log(`📄 .envファイルを検出: ${envPath}`)
       const envContent = readFileSync(envPath, 'utf-8')
       const lines = envContent.split('\n')
       
+      let loadedCount = 0
       for (const line of lines) {
         const trimmedLine = line.trim()
         // コメント行や空行をスキップ
@@ -28,18 +44,26 @@ function loadEnvFile(): void {
         
         const [key, ...valueParts] = trimmedLine.split('=')
         if (key && valueParts.length > 0) {
+          const keyName = key.trim()
           const value = valueParts.join('=').trim()
           // 既に環境変数が設定されている場合は上書きしない
-          if (!process.env[key.trim()]) {
-            process.env[key.trim()] = value
+          if (!process.env[keyName]) {
+            process.env[keyName] = value
+            loadedCount++
+            console.log(`  ✅ ${keyName} を読み込みました`)
+          } else {
+            console.log(`  ⚠️ ${keyName} は既に設定されているためスキップしました`)
           }
         }
       }
-      console.log('✅ .envファイルを読み込みました')
+      console.log(`✅ .envファイルを読み込みました（${loadedCount}個の環境変数を設定）`)
+    } else {
+      console.log('ℹ️ .envファイルが見つかりませんでした（環境変数から読み込みます）')
+      console.log('  試行したパス:', possiblePaths)
     }
   } catch (error) {
     // .envファイルが存在しない、または読み込みエラーの場合は無視
-    console.log('ℹ️ .envファイルが見つかりませんでした（環境変数から読み込みます）')
+    console.error('❌ .envファイルの読み込みエラー:', error)
   }
 }
 
@@ -120,6 +144,14 @@ function createWindow(): void {
   youtubeService = new YoutubeService(mainWindow, webSocketService)
   brainService = new BrainService(mainWindow, webSocketService)
   aiService = new AiService()
+  
+  // 環境変数からAPIキーが設定されている場合は、configureを呼び出して確実に初期化
+  if (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY) {
+    const provider = process.env.GEMINI_API_KEY ? 'gemini' : 'openai'
+    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || ''
+    console.log(`🔧 環境変数から${provider}を設定します`)
+    aiService.configure(provider, apiKey, process.env.DEEPGRAM_API_KEY)
+  }
 
   ipcMain.handle('ai:save-settings', (_event, provider, apiKey) => {
     console.log(`🧠 AI設定を受信: ${provider}`)
@@ -272,15 +304,12 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
   }
 
   // 1. 文字起こし (Deepgram)
-  console.log(`👂 音声処理開始: ${(_arrayBuffer.byteLength / 1024).toFixed(2)}KB`)
   const buffer = Buffer.from(_arrayBuffer)
   const text = await aiService.transcribeAudio(buffer)
 
   if (!text || text.length < 2) {
-    console.log('⚠️ 無音または雑音のためスキップ')
     return null
   }
-  console.log(`🗣️ 認識結果: "${text}"`)
 
   // 2. ガヤ生成 (Gemini or GPT)
   // Laravelから取得済みのキャラ設定があればそれを使う
@@ -289,15 +318,10 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
     const gayaSettings = await serverService.getGayaSettings();
     if (gayaSettings?.system_prompt) {
       systemPrompt = gayaSettings.system_prompt;
-      console.log('📝 Laravelからプロンプトを取得:', systemPrompt);
-    } else {
-      console.log('⚠️ Laravelからプロンプトが取得できませんでした。デフォルト値を使用します。');
     }
   }
   
-  console.log('🧠 ガヤ生成中...');
   const gaya = await aiService.generateGaya(systemPrompt, text);
-  console.log(`💬 ガヤ生成完了: "${gaya}"`);
   
   // 3. オーバーレイに送信！
   const payload = {
@@ -311,7 +335,6 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
   }
 
   // メインウィンドウとオーバーレイに送信
-  console.log('📤 コメント配信:', payload.text)
   mainWindow.webContents.send('new-comment', payload)
   webSocketService.broadcastComment(payload)
 

@@ -26,9 +26,9 @@ type AiProvider = 'openai' | 'gemini';
 
 const AI_COOLDOWN_MS = 600;
 const AI_REPLY_CHANCE = 1;
-const VAD_THRESHOLD = -50;
-const VAD_INTERVAL_MS = 100;
-const VAD_HISTORY = 10;
+const VAD_THRESHOLD = -55; // 音声検出の閾値（dB）。低いほど敏感
+const VAD_INTERVAL_MS = 100; // 音量チェックの間隔（ms）
+const VAD_HISTORY = 10; // 音声検出の履歴（フレーム数）
 function Dashboard(): React.JSX.Element {
   const [settings, setSettings] = useState<GayaSettings | null>(null);
   const [comments, setComments] = useState<Comment[]>([])
@@ -243,7 +243,6 @@ function Dashboard(): React.JSX.Element {
         if (!streamRef.current) return;
         if (mediaRecorderRef.current?.state === 'recording') return;
 
-        console.log('🗣️ 感知開始');
         const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
         const chunks: Blob[] = [];
 
@@ -268,23 +267,12 @@ function Dashboard(): React.JSX.Element {
             randomValue: Math.random()
           });
 
-          if (!decision.allow) {
-            if (decision.reason === 'cooldown') {
-              console.log('🤫 AIはクールダウン中なので無視しました');
-            } else {
-              console.log('🎲 AIは気まぐれにスルーしました');
-            }
-            return;
-          }
+          if (!decision.allow) return;
 
-          console.log(`🚀 音声データ送信: ${(buffer.byteLength / 1024).toFixed(2)}KB`);
           try {
             const result = await (window.api.ai.processAudio(buffer) as unknown) as { text: string; gaya: string } | null;
             if (result !== null && typeof result === 'object' && 'text' in result && 'gaya' in result) {
-              console.log(`✅ 処理完了: "${result.text}" → "${result.gaya}"`);
               lastReplyTimeRef.current = now;
-            } else {
-              console.log('⚠️ 無音または雑音のためスキップ');
             }
           } catch (error) {
             console.error('❌ 音声処理エラー:', error);
@@ -296,7 +284,6 @@ function Dashboard(): React.JSX.Element {
       });
 
       speechEvents.on('stopped_speaking', () => {
-        console.log('🛑 感知終了 -> 送信判定へ');
         if (mediaRecorderRef.current?.state === 'recording') {
           mediaRecorderRef.current.stop();
         }
@@ -305,7 +292,7 @@ function Dashboard(): React.JSX.Element {
       isAutoListeningRef.current = true;
       setIsListening(true);
     } catch (err) {
-      console.error('マイクの取得に失敗:', err);
+      console.error('❌ マイクの取得に失敗:', err);
       alert('マイクの使用を許可してください');
       isAutoListeningRef.current = false;
       setIsListening(false);

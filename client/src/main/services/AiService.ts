@@ -10,13 +10,15 @@ export class AiService {
   private deepgram: ReturnType<typeof createClient> | null = null;
 
   private currentProvider: AiProvider = 'gemini';
-  private modelName: string = 'gemini-2.5-flash-lite'; // gemini-1.5-flashは非推奨のため更新
+  private modelName: string = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
 
   constructor() {
     // 初期化時に環境変数からAPIキーを取得
     const deepgramKey = process.env.DEEPGRAM_API_KEY;
     if (deepgramKey) {
       this.deepgram = createClient(deepgramKey);
+    } else {
+      console.warn('⚠️ DEEPGRAM_API_KEYが環境変数に設定されていません');
     }
 
     // GeminiのAPIキーも環境変数から取得（デフォルトプロバイダーがgeminiの場合）
@@ -24,6 +26,8 @@ export class AiService {
     if (geminiKey && this.currentProvider === 'gemini') {
       this.gemini = new GoogleGenerativeAI(geminiKey);
       this.modelName = 'gemini-2.5-flash';
+    } else if (!geminiKey) {
+      console.warn('⚠️ GEMINI_API_KEYが環境変数に設定されていません');
     }
   }
 
@@ -123,7 +127,6 @@ export class AiService {
 
       if (this.currentProvider === 'openai' && this.openai) {
         // OpenAIの場合
-        console.log(`🤖 OpenAI (${this.modelName}) でガヤ生成中...`);
         const response = await this.openai.chat.completions.create({
           model: this.modelName,
           messages: [
@@ -134,19 +137,40 @@ export class AiService {
         let gaya = response.choices[0].message.content || '';
         // 「」や""を除去（文の最初と最後が括弧で囲まれている場合）
         gaya = gaya.replace(/^[「"「『](.*?)[」"」』]$/, '$1').trim();
-        console.log(`✅ OpenAI ガヤ生成完了`);
         return gaya || '';
 
       } else if (this.currentProvider === 'gemini' && this.gemini) {
         // Geminiの場合
-        console.log(`🤖 Gemini (${this.modelName}) でガヤ生成中...`);
-        const model = this.gemini.getGenerativeModel({ model: this.modelName });
-        const result = await model.generateContent(fullPrompt);
-        let gaya = result.response.text();
-        // 「」や""を除去（文の最初と最後が括弧で囲まれている場合）
-        gaya = gaya.replace(/^[「"「『](.*?)[」"」』]$/, '$1').trim();
-        console.log(`✅ Gemini ガヤ生成完了`);
-        return gaya || '';
+        try {
+          const model = this.gemini.getGenerativeModel({ model: this.modelName });
+          const result = await model.generateContent(fullPrompt);
+          let gaya = result.response.text();
+          // 「」や""を除去（文の最初と最後が括弧で囲まれている場合）
+          gaya = gaya.replace(/^[「"「『](.*?)[」"」』]$/, '$1').trim();
+          return gaya || '';
+        } catch (geminiError: any) {
+          // Gemini APIのエラーを詳細に表示
+          const errorMessage = geminiError?.message || String(geminiError);
+          const statusCode = geminiError?.status || geminiError?.statusCode;
+          
+          if (statusCode === 429 || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+            console.error('⏱️ Gemini APIのレート制限に達しました');
+            console.error('   無料プランの1日20リクエスト制限に達した可能性があります');
+            return '（レート制限: しばらく待ってください）';
+          } else if (statusCode === 401 || errorMessage.includes('401') || errorMessage.includes('API key not valid')) {
+            console.error('🔑 Gemini APIキーが無効です。.envファイルのGEMINI_API_KEYを確認してください。');
+            return '（APIキーエラー: 設定を確認してください）';
+          } else if (statusCode === 403 || errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+            console.error('🔑 Gemini APIキーに権限がありません。APIキーを確認してください。');
+            return '（APIキーエラー: 権限を確認してください）';
+          } else if (errorMessage.includes('leaked')) {
+            console.error('🔑 Gemini APIキーが漏洩として報告されています。新しいAPIキーを取得してください。');
+            return '（APIキーエラー: 新しいキーが必要です）';
+          } else {
+            console.error('❌ Gemini APIエラー:', errorMessage);
+            throw geminiError;
+          }
+        }
       }
 
       console.warn('⚠️ AIの設定がされていません');
