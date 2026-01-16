@@ -11,7 +11,7 @@ interface Comment {
   gaya?: string
 }
 
-export default function Overlay(): JSX.Element {
+export default function Overlay() {
   const [comments, setComments] = useState<Comment[]>([])
 
   useEffect(() => {
