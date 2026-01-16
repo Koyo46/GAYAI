@@ -1,21 +1,22 @@
 import { BrowserWindow } from 'electron'
-import { CommentPayload } from '../types/comment'
+// import { CommentPayload } from '../types/comment'
 import { WebSocketService } from './WebSocketService'
 
 export class BrainService {
-  private mainWindow: BrowserWindow | null = null
+  // private _mainWindow: BrowserWindow | null = null
   private gayaInterval: NodeJS.Timeout | null = null
-  private webSocketService?: WebSocketService
-  
-  private readonly phrases = ['草', 'www', '88888', '天才か？', 'なるほどね', 'きたあああ']
+  // private _webSocketService?: WebSocketService
 
-  constructor(mainWindow: BrowserWindow, webSocketService?: WebSocketService) {
-    this.mainWindow = mainWindow
-    this.webSocketService = webSocketService
+  // private readonly _phrases = ['草', 'www', '88888', '天才か？', 'なるほどね', 'きたあああ']
+
+  constructor(_mainWindow: BrowserWindow, _webSocketService?: WebSocketService) {
+    // this._mainWindow = mainWindow
+    // this._webSocketService = webSocketService
     // 固定文言のガヤ生成を一時的に無効化
     // this.startGayaLoop()
   }
 
+  /*
   private startGayaLoop(): void {
     // 5〜15秒のランダムな間隔でガヤを飛ばす
     const nextInterval = (): number => Math.floor(Math.random() * 10000) + 5000
@@ -28,7 +29,9 @@ export class BrainService {
     }
     tick()
   }
+  */
 
+  /*
   private emitGaya(): void {
     const text = this.phrases[Math.floor(Math.random() * this.phrases.length)]
     const payload: CommentPayload = {
@@ -54,6 +57,7 @@ export class BrainService {
     const logText = Buffer.from(text, 'utf8').toString('utf8')
     console.log(`[Gaya] Generated: ${logText}`)
   }
+  */
 
   /**
    * ガヤ生成を停止

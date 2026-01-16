@@ -12,7 +12,7 @@ import icon from '../../resources/icon.png?asset'
 /**
  * Electron起動時の環境によっては標準出力/ロケールがUTF-8でなく、ログが文字化けすることがある。
  * 可能な範囲でUTF-8に寄せる（既存環境が正しい場合は上書きしない）。
- * 
+ *
  * 配布版でも確実に動作するよう、モジュール読み込み時に実行する。
  */
 function ensureUtf8Console(): void {
@@ -30,13 +30,13 @@ function ensureUtf8Console(): void {
   // 環境変数を設定
   process.env.LC_ALL ??= 'C.UTF-8'
   process.env.LANG ??= 'C.UTF-8'
-  
+
   // Node.jsの標準出力/エラー出力のエンコーディングをUTF-8に設定
   const stdout = process.stdout as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
   const stderr = process.stderr as unknown as { setDefaultEncoding?: (enc: BufferEncoding) => void }
   stdout.setDefaultEncoding?.('utf8')
   stderr.setDefaultEncoding?.('utf8')
-  
+
   // Windowsの場合、コンソール出力のエンコーディングも設定
   if (process.platform === 'win32') {
     try {
@@ -45,7 +45,7 @@ function ensureUtf8Console(): void {
         // バッファリングを無効にしてUTF-8を強制
         process.stdout.write('\x1b[?25h') // カーソルを表示（副作用なし）
       }
-    } catch (error) {
+    } catch {
       // 無視
     }
   }
@@ -61,9 +61,14 @@ let brainService: BrainService | null = null
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 750,
+    width: 900,
+    height: 670,
     show: false,
+    transparent: true, // ウィンドウを透明にする
+    frame: false, // 枠（タイトルバー）を消す
+    hasShadow: false, // ウィンドウの影を消す
+    alwaysOnTop: true, // 常に最前面に表示（ゲームより前に！）
+    resizable: true, // サイズ調整は可能に
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -77,15 +82,15 @@ function createWindow(): void {
   webSocketService = new WebSocketService()
   youtubeService = new YoutubeService(mainWindow, webSocketService)
   brainService = new BrainService(mainWindow, webSocketService)
-  aiService = new AiService();
+  aiService = new AiService()
 
   ipcMain.handle('ai:save-settings', (_event, provider, apiKey) => {
-    console.log(`🧠 AI設定を受信: ${provider}`);
+    console.log(`🧠 AI設定を受信: ${provider}`)
     if (aiService) {
-      aiService.configure(provider, apiKey);
+      aiService.configure(provider, apiKey)
     }
-    return true; // 成功を返す
-  });
+    return true // 成功を返す
+  })
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -96,17 +101,20 @@ function createWindow(): void {
     // WebSocketサーバーを起動
     const wsService = webSocketService
     if (wsService) {
-      wsService.start().then(() => {
-        console.log('✅ WebSocket server ready')
-        // オーバーレイURLを更新
-        if (serverService && wsService) {
-          const status = serverService.getStatus()
-          status.overlayUrl = wsService.getOverlayUrl()
-          serverService['notifyStatusChange']()
-        }
-      }).catch((error) => {
-        console.error('❌ Failed to start WebSocket server:', error)
-      })
+      wsService
+        .start()
+        .then(() => {
+          console.log('✅ WebSocket server ready')
+          // オーバーレイURLを更新
+          if (serverService && wsService) {
+            const status = serverService.getStatus()
+            status.overlayUrl = wsService.getOverlayUrl()
+            serverService['notifyStatusChange']()
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Failed to start WebSocket server:', error)
+        })
     }
   })
 
@@ -158,23 +166,24 @@ app.whenReady().then(() => {
       const connected = await serverService.checkConnection()
       if (!connected) {
         const status = serverService.getStatus()
-        return { 
-          success: false, 
-          error: `サーバーに接続できませんでした。URL: ${status.serverUrl || '未設定'}` 
+        return {
+          success: false,
+          error: `サーバーに接続できませんでした。URL: ${status.serverUrl || '未設定'}`
         }
       }
       return { success: true }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : '接続チェック中にエラーが発生しました' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '接続チェック中にエラーが発生しました'
       }
     }
   })
 
   // サーバー状態取得
   ipcMain.handle('server:status', () => {
-    if (!serverService) return { isConnected: false, serverUrl: null, overlayUrl: null, lastChecked: null }
+    if (!serverService)
+      return { isConnected: false, serverUrl: null, overlayUrl: null, lastChecked: null }
     return serverService.getStatus()
   })
 
@@ -209,32 +218,32 @@ app.whenReady().then(() => {
 ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => {
   // サービスが初期化されているかチェック
   if (!aiService) {
-    console.error('❌ AiService is not initialized');
-    return { error: 'AiService is not initialized' };
+    console.error('❌ AiService is not initialized')
+    return { error: 'AiService is not initialized' }
   }
 
   if (!webSocketService) {
-    console.error('❌ WebSocketService is not initialized');
-    return { error: 'WebSocketService is not initialized' };
+    console.error('❌ WebSocketService is not initialized')
+    return { error: 'WebSocketService is not initialized' }
   }
 
-  const windows = BrowserWindow.getAllWindows();
-  const mainWindow = windows.length > 0 ? windows[0] : null;
+  const windows = BrowserWindow.getAllWindows()
+  const mainWindow = windows.length > 0 ? windows[0] : null
   if (!mainWindow || mainWindow.isDestroyed()) {
-    console.error('❌ Main window is not available');
-    return { error: 'Main window is not available' };
+    console.error('❌ Main window is not available')
+    return { error: 'Main window is not available' }
   }
 
   // 1. 文字起こし (Deepgram)
-  console.log(`👂 音声処理開始: ${(_arrayBuffer.byteLength / 1024).toFixed(2)}KB`);
-  const buffer = Buffer.from(_arrayBuffer);
-  const text = await aiService.transcribeAudio(buffer);
-  
+  console.log(`👂 音声処理開始: ${(_arrayBuffer.byteLength / 1024).toFixed(2)}KB`)
+  const buffer = Buffer.from(_arrayBuffer)
+  const text = await aiService.transcribeAudio(buffer)
+
   if (!text || text.length < 2) {
-    console.log('⚠️ 無音または雑音のためスキップ');
-    return null;
+    console.log('⚠️ 無音または雑音のためスキップ')
+    return null
   }
-  console.log(`🗣️ 認識結果: "${text}"`);
+  console.log(`🗣️ 認識結果: "${text}"`)
 
   // 2. ガヤ生成 (Gemini or GPT)
   // Laravelから取得済みのキャラ設定があればそれを使う
@@ -257,19 +266,20 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
   const payload = {
     id: `ai-${Date.now()}`,
     name: 'GAYAI (AI)',
-    text: gaya, // ガヤを表示
+    text: text, // 文字起こし
+    gaya: gaya, // ガヤ
     isGaya: true,
     avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
     timestamp: Date.now()
-  };
+  }
 
   // メインウィンドウとオーバーレイに送信
-  console.log('📤 コメント配信:', payload.text);
-  mainWindow.webContents.send('new-comment', payload);
-  webSocketService.broadcastComment(payload);
+  console.log('📤 コメント配信:', payload.text)
+  mainWindow.webContents.send('new-comment', payload)
+  webSocketService.broadcastComment(payload)
 
-  return { text, gaya };
-});
+  return { text, gaya }
+})
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 function Versions(): React.JSX.Element {
+  // @ts-ignore process is not defined in ElectronAPI type
   const [versions] = useState(window.electron.process.versions)
 
   return (
