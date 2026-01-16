@@ -17,7 +17,7 @@ import { BrowserWindow } from 'electron';
 // ============================================
 // APIキーをここに設定してください
 // ============================================
-const GEMINI_API_KEY = 'AIzaSyBQjhWMLAkhzh5lFROBxi7Wsn5m3_r71FY'; // Gemini APIキー
+const GEMINI_API_KEY = 'hoge'; // Gemini APIキー
 const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY_HERE'; // OpenAI APIキー（オプション）
 
 // 使用するプロバイダーを選択: 'gemini' または 'openai'
