@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テスト用WebM音声ファイル作成ツール</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px 5px;
+      cursor: pointer;
+    }
+    .recording {
+      color: red;
+      font-weight: bold;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>テスト用WebM音声ファイル作成ツール</h1>
+  
+  <div class="status" id="status">準備完了</div>
+  
+  <button id="startBtn" onclick="startRecording()">録音開始</button>
+  <button id="stopBtn" onclick="stopRecording()" disabled>録音停止</button>
+  
+  <div style="margin-top: 20px;">
+    <label>
+      録音時間（秒）:
+      <input type="number" id="duration" value="5" min="1" max="30" style="width: 60px;">
+    </label>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let timeoutId;
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          // ダウンロードリンクを作成
+          const a = document.createElement('a');
+          a.href = audioUrl;
+          a.download = 'test-audio.webm';
+          a.click();
+          
+          // クリーンアップ
+          URL.revokeObjectURL(audioUrl);
+          stream.getTracks().forEach(track => track.stop());
+          
+          document.getElementById('status').textContent = 
+            `✅ 録音完了！test-audio.webm がダウンロードされました。`;
+          document.getElementById('status').style.color = 'green';
+        };
+
+        mediaRecorder.start();
+        document.getElementById('status').textContent = '🔴 録音中...';
+        document.getElementById('status').style.color = 'red';
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+
+        // 自動停止（オプション）
+        const duration = parseInt(document.getElementById('duration').value) * 1000;
+        timeoutId = setTimeout(() => {
+          stopRecording();
+        }, duration);
+
+      } catch (error) {
+        console.error('録音エラー:', error);
+        document.getElementById('status').textContent = 
+          `❌ エラー: ${error.message}\nマイクの使用を許可してください。`;
+        document.getElementById('status').style.color = 'red';
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+      }
+    }
+  </script>
+</body>
+</html>

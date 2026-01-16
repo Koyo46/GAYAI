@@ -24,8 +24,8 @@ interface ServerStatus {
 }
 type AiProvider = 'openai' | 'gemini';
 
-const AI_COOLDOWN_MS = 60000;
-const AI_REPLY_CHANCE = 0.5;
+const AI_COOLDOWN_MS = 600;
+const AI_REPLY_CHANCE = 1;
 const VAD_THRESHOLD = -50;
 const VAD_INTERVAL_MS = 100;
 const VAD_HISTORY = 10;
