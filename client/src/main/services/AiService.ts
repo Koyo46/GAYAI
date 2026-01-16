@@ -13,31 +13,53 @@ export class AiService {
   private modelName: string = 'gemini-2.5-flash-lite'; // gemini-1.5-flashは非推奨のため更新
 
   constructor() {
-    // 初期化時にDeepgramを設定（ハードコードされたキー）
-    // TODO: 後でダッシュボードから設定できるようにする
-    this.deepgram = createClient('e6ffa632ccce18baf6abef2251d410be6daa8555');
+    // 初期化時に環境変数からAPIキーを取得
+    const deepgramKey = process.env.DEEPGRAM_API_KEY;
+    if (deepgramKey) {
+      this.deepgram = createClient(deepgramKey);
+    }
+
+    // GeminiのAPIキーも環境変数から取得（デフォルトプロバイダーがgeminiの場合）
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey && this.currentProvider === 'gemini') {
+      this.gemini = new GoogleGenerativeAI(geminiKey);
+      this.modelName = 'gemini-2.5-flash';
+    }
   }
 
   // 設定更新
   public configure(provider: AiProvider, apiKey: string, deepgramKey?: string) {
     this.currentProvider = provider;
     
-    // 脳みその設定 (既存)
+    // 脳みその設定
+    // apiKeyが空の場合は環境変数から取得を試みる
+    let actualApiKey = apiKey;
+    if (!actualApiKey || actualApiKey.trim() === '') {
+      if (provider === 'openai') {
+        actualApiKey = process.env.OPENAI_API_KEY || '';
+      } else {
+        actualApiKey = process.env.GEMINI_API_KEY || '';
+      }
+    }
+
     if (provider === 'openai') {
-      this.openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
-      this.modelName = 'gpt-4o-mini';
+      if (actualApiKey) {
+        this.openai = new OpenAI({ apiKey: actualApiKey, dangerouslyAllowBrowser: true });
+        this.modelName = 'gpt-4o-mini';
+      }
     } else {
-      this.gemini = new GoogleGenerativeAI(apiKey);
-      this.modelName = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
+      if (actualApiKey) {
+        this.gemini = new GoogleGenerativeAI(actualApiKey);
+        this.modelName = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
+      }
     }
 
     // ★耳の設定 (Deepgram)
-    // ダッシュボードでDeepgramキーも保存できるようにする必要がありますが
-    // 一旦ハードコードか、OpenAIキーとは別に管理するのが理想です。
-    if (deepgramKey) {
-      this.deepgram = createClient(deepgramKey);
+    // deepgramKeyが提供された場合はそれを使用、なければ環境変数から取得
+    const actualDeepgramKey = deepgramKey || process.env.DEEPGRAM_API_KEY;
+    if (actualDeepgramKey) {
+      this.deepgram = createClient(actualDeepgramKey);
     }
-    // キーが提供されない場合は、コンストラクタで設定されたデフォルトキーを使用
   }
 
   // ★Deepgramで高速文字起こし

@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { execSync } from 'child_process'
+import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { YoutubeService } from './services/YoutubeService'
 import { ServerService } from './services/ServerService'
@@ -8,6 +9,42 @@ import { BrainService } from './services/BrainService'
 import { WebSocketService } from './services/WebSocketService'
 import { AiService } from './services/AiService'
 import icon from '../../resources/icon.png?asset'
+
+/**
+ * .envファイルを読み込んで環境変数に設定する
+ * dotenvパッケージがなくても動作する簡易実装
+ */
+function loadEnvFile(): void {
+  try {
+    const envPath = join(__dirname, '../../../../.env')
+    if (existsSync(envPath)) {
+      const envContent = readFileSync(envPath, 'utf-8')
+      const lines = envContent.split('\n')
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        // コメント行や空行をスキップ
+        if (!trimmedLine || trimmedLine.startsWith('#')) continue
+        
+        const [key, ...valueParts] = trimmedLine.split('=')
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join('=').trim()
+          // 既に環境変数が設定されている場合は上書きしない
+          if (!process.env[key.trim()]) {
+            process.env[key.trim()] = value
+          }
+        }
+      }
+      console.log('✅ .envファイルを読み込みました')
+    }
+  } catch (error) {
+    // .envファイルが存在しない、または読み込みエラーの場合は無視
+    console.log('ℹ️ .envファイルが見つかりませんでした（環境変数から読み込みます）')
+  }
+}
+
+// アプリ起動時に.envファイルを読み込む
+loadEnvFile()
 
 /**
  * Electron起動時の環境によっては標準出力/ロケールがUTF-8でなく、ログが文字化けすることがある。
