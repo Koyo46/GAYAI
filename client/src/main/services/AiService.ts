@@ -10,7 +10,7 @@ export class AiService {
   private deepgram: ReturnType<typeof createClient> | null = null;
 
   private currentProvider: AiProvider = 'gemini';
-  private modelName: string = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
+  private modelName: string = 'gemini-2.5-flash-lite'; // gemini-1.5-flashは非推奨のため更新
 
   constructor() {
     // 初期化時にDeepgramを設定（ハードコードされたキー）
