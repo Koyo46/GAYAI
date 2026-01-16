@@ -137,6 +137,9 @@ export class AiService {
         let gaya = response.choices[0].message.content || '';
         // 「」や""を除去（文の最初と最後が括弧で囲まれている場合）
         gaya = gaya.replace(/^[「"「『](.*?)[」"」』]$/, '$1').trim();
+        if (gaya) {
+          console.log(`✅ OpenAI ガヤ生成成功: "${gaya}"`);
+        }
         return gaya || '';
 
       } else if (this.currentProvider === 'gemini' && this.gemini) {
@@ -147,6 +150,9 @@ export class AiService {
           let gaya = result.response.text();
           // 「」や""を除去（文の最初と最後が括弧で囲まれている場合）
           gaya = gaya.replace(/^[「"「『](.*?)[」"」』]$/, '$1').trim();
+          if (gaya) {
+            console.log(`✅ Gemini ガヤ生成成功: "${gaya}"`);
+          }
           return gaya || '';
         } catch (geminiError: any) {
           // Gemini APIのエラーを詳細に表示

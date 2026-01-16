@@ -23,7 +23,7 @@ interface Comment {
   name: string;
   text: string;
   avatar?: string;
-  gaya?: string; // AIのツッコミ
+  isGaya?: boolean; // AIによるガヤかどうか
   timestamp: number; // 表示時間管理用
 }
 
@@ -95,35 +95,36 @@ export default function Overlay() {
               maxWidth: '85%', // 画面幅いっぱいにしない
             }}>
               
-              {/* === 上段：配信者/視聴者のコメント === */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                marginBottom: c.gaya ? '4px' : '0', // AIツッコミがある時は少し隙間を空ける
-              }}>
-                {/* アバター */}
-                <img 
-                  src={c.avatar || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'} 
-                  style={{
-                    width: '36px', height: '36px', borderRadius: '50%',
-                    marginRight: '12px', border: '2px solid rgba(255,255,255,0.2)'
-                  }}
-                />
-                {/* 名前と本文 */}
+              {/* === 上段：配信者/視聴者のコメント（AIガヤの場合は非表示） === */}
+              {!c.isGaya && (
                 <div style={{
-                  background: STYLES.userBubbleBg,
-                  padding: '8px 14px',
-                  borderRadius: '18px',
-                  borderTopLeftRadius: '4px', // 吹き出しっぽく左上を尖らせる
-                  backdropFilter: 'blur(4px)', // すりガラス効果
+                  display: 'flex',
+                  alignItems: 'flex-start',
                 }}>
-                  <div style={{ fontSize: '12px', color: '#ccc', marginBottom: '2px' }}>{c.name}</div>
-                  <div style={{ fontSize: '16px', lineHeight: '1.4' }}>{c.text}</div>
+                  {/* アバター */}
+                  <img 
+                    src={c.avatar || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'} 
+                    style={{
+                      width: '36px', height: '36px', borderRadius: '50%',
+                      marginRight: '12px', border: '2px solid rgba(255,255,255,0.2)'
+                    }}
+                  />
+                  {/* 名前と本文 */}
+                  <div style={{
+                    background: STYLES.userBubbleBg,
+                    padding: '8px 14px',
+                    borderRadius: '18px',
+                    borderTopLeftRadius: '4px', // 吹き出しっぽく左上を尖らせる
+                    backdropFilter: 'blur(4px)', // すりガラス効果
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#ccc', marginBottom: '2px' }}>{c.name}</div>
+                    <div style={{ fontSize: '16px', lineHeight: '1.4' }}>{c.text}</div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* === 下段：AIのツッコミ (Gaya) === */}
-              {c.gaya && (
+              {/* === 下段：AIのツッコミ (Gaya) - AIガヤの場合はここだけ表示 === */}
+              {c.isGaya && (
                 <div style={{
                   display: 'flex',
                   justifyContent: 'flex-start',
@@ -151,13 +152,13 @@ export default function Overlay() {
                       <span style={{ fontSize: '18px' }}>🤖</span>
                     </div>
                     
-                    {/* ツッコミ本文 */}
+                    {/* ツッコミ本文 - textにガヤが入っている */}
                     <div style={{ 
                       fontSize: '20px', // AIの声は少し大きく
                       fontWeight: 'bold',
                       textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
                     }}>
-                      {c.gaya}
+                      {c.text}
                     </div>
                   </div>
                 </div>

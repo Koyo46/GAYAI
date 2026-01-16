@@ -321,14 +321,23 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
     }
   }
   
+  console.log(`🧠 ガヤ生成を開始: 文字起こしテキスト="${text}"`);
   const gaya = await aiService.generateGaya(systemPrompt, text);
   
+  // ガヤが生成されなかった場合はエラーとして扱う（文字起こしテキストをそのまま送信しない）
+  if (!gaya || gaya.trim().length === 0) {
+    console.error('❌ ガヤが生成されませんでした。AI設定を確認してください。');
+    return { error: 'ガヤが生成されませんでした' };
+  }
+  
+  console.log(`✅ ガヤ生成成功: "${gaya}"`);
+  
   // 3. オーバーレイに送信！
+  // isGaya: true の場合は、textにガヤを入れる（文字起こしテキストは表示しない）
   const payload = {
     id: `ai-${Date.now()}`,
     name: 'GAYAI (AI)',
-    text: text, // 文字起こし
-    gaya: gaya, // ガヤ
+    text: gaya, // ガヤをtextに入れる
     isGaya: true,
     avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
     timestamp: Date.now()
