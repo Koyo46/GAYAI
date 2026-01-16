@@ -4,13 +4,49 @@ import OpenAI from 'openai';
 
 export type AiProvider = 'openai' | 'gemini';
 
+// 人格定義
+export interface Personality {
+  name: string; // 人格名
+  systemPrompt: string; // システムプロンプト
+  avatarUrl?: string; // アバターURL（オプション）
+}
+
 export class AiService {
   private openai: OpenAI | null = null;
   private gemini: GoogleGenerativeAI | null = null;
   private deepgram: ReturnType<typeof createClient> | null = null;
 
   private currentProvider: AiProvider = 'gemini';
-  private modelName: string = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
+  private modelName: string = 'gemini-2.5-flash-lite'; // gemini-1.5-flashは非推奨のため更新
+
+  // 人格定義（ローカル）
+  private readonly personalities: Personality[] = [
+    {
+      name: 'ツッコミ',
+      systemPrompt: 'あなたは配信者のツッコミ役です。配信者の独り言に対して、軽快で的確なツッコミを30～100文字で返してください。関西弁で話すことが多いです。',
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png'
+    },
+    {
+      name: '応援マン',
+      systemPrompt: 'あなたは配信者の応援団です。配信者の独り言に対して、熱く応援するコメントを30～100文字で返してください。ポジティブで前向きな言葉を使います。',
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
+    },
+    {
+      name: '解説者',
+      systemPrompt: 'あなたは配信の解説者です。配信者の独り言に対して、冷静に分析し的確なアドバイスや豆知識を30～100文字でコメントしてください。',
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png'
+    },
+    {
+      name: '毒舌',
+      systemPrompt: 'あなたは配信者の毒舌な友達です。配信者の独り言に対して、皮肉や毒舌を交えつつも愛のあるコメントを30～100文字で返してください。',
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135789.png'
+    },
+    {
+      name: '優しい先輩',
+      systemPrompt: 'あなたは配信者の優しい先輩です。配信者の独り言に対して、優しく励ましやアドバイスを30～100文字で返してください。',
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
+    }
+  ];
 
   constructor() {
     // 初期化時に環境変数からAPIキーを取得
@@ -25,7 +61,7 @@ export class AiService {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey && this.currentProvider === 'gemini') {
       this.gemini = new GoogleGenerativeAI(geminiKey);
-      this.modelName = 'gemini-2.5-flash';
+      this.modelName = 'gemini-2.5-flash-lite';
     } else if (!geminiKey) {
       console.warn('⚠️ GEMINI_API_KEYが環境変数に設定されていません');
     }
@@ -54,7 +90,7 @@ export class AiService {
     } else {
       if (actualApiKey) {
         this.gemini = new GoogleGenerativeAI(actualApiKey);
-        this.modelName = 'gemini-2.5-flash'; // gemini-1.5-flashは非推奨のため更新
+        this.modelName = 'gemini-2.5-flash-lite'; // gemini-1.5-flashは非推奨のため更新
       }
     }
 
@@ -185,5 +221,41 @@ export class AiService {
       console.error('❌ AI Error:', error);
       return '（AIが混乱しています...）';
     }
+  }
+
+  /**
+   * 全人格からガヤを並列生成
+   */
+  public async generateGayaFromAllPersonalities(userComment: string): Promise<Array<{ personality: Personality; gaya: string }>> {
+    console.log(`🧠 全人格からガヤ生成を開始: 文字起こしテキスト="${userComment}"`);
+    
+    // 全人格を並列で生成
+    const promises = this.personalities.map(async (personality) => {
+      try {
+        const gaya = await this.generateGaya(personality.systemPrompt, userComment);
+        return { personality, gaya };
+      } catch (error) {
+        console.error(`❌ 人格「${personality.name}」のガヤ生成に失敗:`, error);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(promises);
+    
+    // 成功したものだけをフィルタリング（空文字列も除外）
+    const validResults = results.filter(
+      (result): result is { personality: Personality; gaya: string } =>
+        result !== null && result.gaya.trim().length > 0
+    );
+
+    console.log(`✅ ${validResults.length}/${this.personalities.length}個の人格からガヤ生成成功`);
+    return validResults;
+  }
+
+  /**
+   * 人格定義を取得
+   */
+  public getPersonalities(): Personality[] {
+    return this.personalities;
   }
 }

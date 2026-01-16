@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { execSync } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { YoutubeService } from './services/YoutubeService'
 import { ServerService } from './services/ServerService'
@@ -119,6 +119,53 @@ let aiService: AiService | null = null
 let youtubeService: YoutubeService | null = null
 let brainService: BrainService | null = null
 
+// アプリ設定の型定義
+interface AppConfig {
+  multiPersonalityMode: boolean // 全人格応答モード（デフォルト: true = 開発中）
+}
+
+// 設定ファイルのパス
+function getConfigPath(): string {
+  return join(app.getPath('userData'), 'app-config.json')
+}
+
+// 設定を読み込む
+function loadAppConfig(): AppConfig {
+  const configPath = getConfigPath()
+  const defaultConfig: AppConfig = {
+    multiPersonalityMode: true // デフォルトは全人格モード（開発中）
+  }
+
+  if (!existsSync(configPath)) {
+    return defaultConfig
+  }
+
+  try {
+    const configData = readFileSync(configPath, 'utf-8')
+    const config = JSON.parse(configData) as Partial<AppConfig>
+    return {
+      multiPersonalityMode: config.multiPersonalityMode ?? defaultConfig.multiPersonalityMode
+    }
+  } catch (error) {
+    console.error('❌ 設定ファイルの読み込みに失敗:', error)
+    return defaultConfig
+  }
+}
+
+// 設定を保存
+function saveAppConfig(config: AppConfig): void {
+  const configPath = getConfigPath()
+  try {
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    console.log('✅ アプリ設定を保存しました:', config)
+  } catch (error) {
+    console.error('❌ 設定ファイルの保存に失敗:', error)
+  }
+}
+
+// グローバル設定
+let appConfig: AppConfig = loadAppConfig()
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -128,7 +175,7 @@ function createWindow(): void {
     transparent: true, // ウィンドウを透明にする
     frame: false, // 枠（タイトルバー）を消す
     hasShadow: false, // ウィンドウの影を消す
-    alwaysOnTop: true, // 常に最前面に表示（ゲームより前に！）
+    alwaysOnTop: false, // デフォルトはfalse（ルート変更時に動的に設定）
     resizable: true, // サイズ調整は可能に
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -185,6 +232,20 @@ function createWindow(): void {
           console.error('❌ Failed to start WebSocket server:', error)
         })
     }
+  })
+
+  // ルート変更を監視して、Overlayの時だけ前面固定にする
+  mainWindow.webContents.on('did-navigate', (_event, url) => {
+    const isOverlay = url.includes('#/overlay') || url.includes('/overlay')
+    mainWindow.setAlwaysOnTop(isOverlay)
+    console.log(`🪟 ${isOverlay ? 'Overlay' : 'Dashboard'}表示: alwaysOnTop=${isOverlay}`)
+  })
+
+  // HashRouterの場合はdid-navigate-in-pageイベントも監視
+  mainWindow.webContents.on('did-navigate-in-page', (_event, url) => {
+    const isOverlay = url.includes('#/overlay') || url.includes('/overlay')
+    mainWindow.setAlwaysOnTop(isOverlay)
+    console.log(`🪟 ${isOverlay ? 'Overlay' : 'Dashboard'}表示: alwaysOnTop=${isOverlay}`)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -256,6 +317,18 @@ app.whenReady().then(() => {
     return serverService.getStatus()
   })
 
+  // アプリ設定取得
+  ipcMain.handle('app:getConfig', () => {
+    return appConfig
+  })
+
+  // アプリ設定保存
+  ipcMain.handle('app:setConfig', (_event, config: Partial<AppConfig>) => {
+    appConfig = { ...appConfig, ...config }
+    saveAppConfig(appConfig)
+    return appConfig
+  })
+
   // YouTube配信開始
   ipcMain.handle('youtube:start', async (_event, liveId: string) => {
     if (!youtubeService) return { error: 'YouTube service not initialized' }
@@ -311,43 +384,89 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
     return null
   }
 
-  // 2. ガヤ生成 (Gemini or GPT)
-  // Laravelから取得済みのキャラ設定があればそれを使う
-  let systemPrompt = "あなたは配信者のチェアマンです。配信者の独り言に対して、冷静に分析し的確なアドバイスや豆知識を30～100文字ぐらいでコメントしてください。";
-  if (serverService) {
-    const gayaSettings = await serverService.getGayaSettings();
-    if (gayaSettings?.system_prompt) {
-      systemPrompt = gayaSettings.system_prompt;
+  // 2. ガヤ生成（設定に応じて全人格 or 1人格）
+  if (appConfig.multiPersonalityMode) {
+    // 全人格モード
+    const gayaResults = await aiService.generateGayaFromAllPersonalities(text);
+    
+    // ガヤが1つも生成されなかった場合はエラーとして扱う
+    if (gayaResults.length === 0) {
+      console.error('❌ どの人格からもガヤが生成されませんでした。AI設定を確認してください。');
+      return { error: 'ガヤが生成されませんでした' };
     }
-  }
-  
-  console.log(`🧠 ガヤ生成を開始: 文字起こしテキスト="${text}"`);
-  const gaya = await aiService.generateGaya(systemPrompt, text);
-  
-  // ガヤが生成されなかった場合はエラーとして扱う（文字起こしテキストをそのまま送信しない）
-  if (!gaya || gaya.trim().length === 0) {
-    console.error('❌ ガヤが生成されませんでした。AI設定を確認してください。');
-    return { error: 'ガヤが生成されませんでした' };
-  }
-  
-  console.log(`✅ ガヤ生成成功: "${gaya}"`);
-  
-  // 3. オーバーレイに送信！
-  // isGaya: true の場合は、textにガヤを入れる（文字起こしテキストは表示しない）
-  const payload = {
-    id: `ai-${Date.now()}`,
-    name: 'GAYAI (AI)',
-    text: gaya, // ガヤをtextに入れる
-    isGaya: true,
-    avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
-    timestamp: Date.now()
-  }
+    
+    // 3. 順番をランダムにシャッフル
+    const shuffledResults = [...gayaResults].sort(() => Math.random() - 0.5);
+    console.log(`🎲 コメント順をランダム化: ${shuffledResults.map(r => r.personality.name).join(' → ')}`);
+    
+    // 4. 2秒間隔で順番に送信
+    const INTERVAL_MS = 2000; // 2秒間隔
+    
+    for (let i = 0; i < shuffledResults.length; i++) {
+      const { personality, gaya } = shuffledResults[i];
+      
+      // 最初の1つは即座に送信、2つ目以降は2秒待つ
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
+      }
+      
+      const payload = {
+        id: `ai-${Date.now()}-${i}`,
+        name: `${personality.name} (AI)`,
+        text: gaya,
+        isGaya: true,
+        avatarUrl: personality.avatarUrl || 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+        timestamp: Date.now()
+      };
 
-  // メインウィンドウとオーバーレイに送信
-  mainWindow.webContents.send('new-comment', payload)
-  webSocketService.broadcastComment(payload)
+      // メインウィンドウとオーバーレイに送信
+      mainWindow.webContents.send('new-comment', payload);
+      webSocketService.broadcastComment(payload);
+      
+      console.log(`📤 [${i + 1}/${gayaResults.length}] ${personality.name}: "${gaya}"`);
+    }
 
-  return { text, gaya }
+    return { 
+      text, 
+      gaya: gayaResults.map(r => `${r.personality.name}: ${r.gaya}`).join(' | ')
+    }
+  } else {
+    // 1人格モード（従来の動作）
+    let systemPrompt = "あなたは配信者のチェアマンです。配信者の独り言に対して、冷静に分析し的確なアドバイスや豆知識を30～100文字ぐらいでコメントしてください。";
+    if (serverService) {
+      const gayaSettings = await serverService.getGayaSettings();
+      if (gayaSettings?.system_prompt) {
+        systemPrompt = gayaSettings.system_prompt;
+      }
+    }
+    
+    console.log(`🧠 ガヤ生成を開始: 文字起こしテキスト="${text}"`);
+    const gaya = await aiService.generateGaya(systemPrompt, text);
+    
+    // ガヤが生成されなかった場合はエラーとして扱う
+    if (!gaya || gaya.trim().length === 0) {
+      console.error('❌ ガヤが生成されませんでした。AI設定を確認してください。');
+      return { error: 'ガヤが生成されませんでした' };
+    }
+    
+    console.log(`✅ ガヤ生成成功: "${gaya}"`);
+    
+    // オーバーレイに送信
+    const payload = {
+      id: `ai-${Date.now()}`,
+      name: 'GAYAI (AI)',
+      text: gaya,
+      isGaya: true,
+      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+      timestamp: Date.now()
+    }
+
+    // メインウィンドウとオーバーレイに送信
+    mainWindow.webContents.send('new-comment', payload)
+    webSocketService.broadcastComment(payload)
+
+    return { text, gaya }
+  }
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common

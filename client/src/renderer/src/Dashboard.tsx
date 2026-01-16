@@ -46,6 +46,7 @@ function Dashboard(): React.JSX.Element {
   const [apiKey, setApiKey] = useState('');
   const [isAiSaved, setIsAiSaved] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [multiPersonalityMode, setMultiPersonalityMode] = useState(true); // デフォルトは全人格モード
   const lastReplyTimeRef = useRef(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -82,6 +83,41 @@ function Dashboard(): React.JSX.Element {
       unsubscribe()
     }
   }, [])
+
+  // アプリ設定を読み込む
+  useEffect(() => {
+    if (!window.api?.app) {
+      return
+    }
+
+    const loadConfig = async () => {
+      try {
+        const config = await window.api.app.getConfig()
+        setMultiPersonalityMode(config.multiPersonalityMode)
+      } catch (error) {
+        console.error('[Dashboard] Failed to load app config:', error)
+      }
+    }
+    loadConfig()
+  }, [])
+
+  // 全人格/1人格モードの切り替え
+  const handleTogglePersonalityMode = async () => {
+    if (!window.api?.app) {
+      alert('APIが利用できません。アプリを再起動してください。')
+      return
+    }
+
+    try {
+      const newMode = !multiPersonalityMode
+      const config = await window.api.app.setConfig({ multiPersonalityMode: newMode })
+      setMultiPersonalityMode(config.multiPersonalityMode)
+      alert(`✅ ${newMode ? '全人格応答モード' : '1人格応答モード'}に切り替えました`)
+    } catch (error) {
+      console.error(error)
+      alert('設定の保存に失敗しました')
+    }
+  }
 
   // サーバーURLが設定されたら設定を取得（接続状態に関係なく）
   useEffect(() => {
@@ -423,6 +459,62 @@ function Dashboard(): React.JSX.Element {
         
         <div style={{ fontSize: 12, color: '#888' }}>
           ※ アプリを再起動するとキーはリセットされます（セキュリティのため今は保存しません）
+        </div>
+      </div>
+
+      {/* 応答モード切り替え */}
+      <div style={{ 
+        background: '#2a2a2a', 
+        padding: 20, 
+        borderRadius: 12, 
+        marginBottom: 24,
+        border: '1px solid #444'
+      }}>
+        <h2 style={{ margin: 0, marginBottom: 16, fontSize: 18 }}>
+          🎭 応答モード設定
+        </h2>
+        
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 16,
+          marginBottom: 12
+        }}>
+          <label style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 8,
+            cursor: 'pointer',
+            fontSize: 14
+          }}>
+            <input
+              type="checkbox"
+              checked={multiPersonalityMode}
+              onChange={handleTogglePersonalityMode}
+              style={{
+                width: 20,
+                height: 20,
+                cursor: 'pointer'
+              }}
+            />
+            <span style={{ fontWeight: 'bold' }}>
+              {multiPersonalityMode ? '全人格応答モード' : '1人格応答モード'}
+            </span>
+          </label>
+        </div>
+        
+        <div style={{ fontSize: 12, color: '#888' }}>
+          {multiPersonalityMode ? (
+            <>
+              💎 <strong style={{ color: '#ffd700' }}>全人格応答モード（課金オプション）</strong><br />
+              複数の人格からコメントを生成し、2秒間隔で順番に表示します。
+            </>
+          ) : (
+            <>
+              📌 <strong>1人格応答モード（無料）</strong><br />
+              1つの人格からコメントを生成します。
+            </>
+          )}
         </div>
       </div>
 

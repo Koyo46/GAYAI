@@ -25,6 +25,10 @@ declare global {
         saveSettings: (provider: string, apiKey: string) => Promise<boolean>
         processAudio: (arrayBuffer: ArrayBuffer) => Promise<{ text: string; gaya: string } | null>
       }
+      app: {
+        getConfig: () => Promise<{ multiPersonalityMode: boolean }>
+        setConfig: (config: { multiPersonalityMode?: boolean }) => Promise<{ multiPersonalityMode: boolean }>
+      }
     }
   }
 }

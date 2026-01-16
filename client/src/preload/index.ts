@@ -24,6 +24,11 @@ const api = {
       ipcRenderer.invoke('ai:save-settings', provider, apiKey),
     processAudio: (arrayBuffer: ArrayBuffer) =>
       ipcRenderer.invoke('ai:process-audio', arrayBuffer) as Promise<{ text: string; gaya: string } | null>
+  },
+  // アプリ設定
+  app: {
+    getConfig: () => ipcRenderer.invoke('app:getConfig'),
+    setConfig: (config: { multiPersonalityMode?: boolean }) => ipcRenderer.invoke('app:setConfig', config)
   }
 }
 
