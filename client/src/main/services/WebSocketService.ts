@@ -68,6 +68,13 @@ export class WebSocketService {
         return
       }
 
+      // 既に起動している場合は何もしない
+      if (this.httpServer.listening) {
+        console.log(`⚠️ WebSocket server is already running on port ${this.port}`)
+        resolve()
+        return
+      }
+
       this.httpServer.listen(this.port, () => {
         console.log(`🚀 WebSocket server started on http://localhost:${this.port}`)
         console.log(`📺 Overlay URL: http://localhost:${this.port}/overlay/index.html`)
@@ -75,8 +82,14 @@ export class WebSocketService {
       })
 
       this.httpServer.on('error', (error) => {
-        console.error('❌ WebSocket server error:', error)
-        reject(error)
+        // ERR_SERVER_ALREADY_LISTENエラーの場合は既に起動しているとみなす
+        if ((error as NodeJS.ErrnoException).code === 'ERR_SERVER_ALREADY_LISTEN') {
+          console.log(`⚠️ WebSocket server is already listening on port ${this.port}`)
+          resolve()
+        } else {
+          console.error('❌ WebSocket server error:', error)
+          reject(error)
+        }
       })
     })
   }

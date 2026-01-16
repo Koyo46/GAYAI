@@ -1,7 +1,21 @@
-import { useEffect, useState } from 'react';
+// src/renderer/src/Overlay.tsx
+import { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 
-// ★重要：ポート番号をLocalServer.tsと合わせる
+// ▼▼▼ デザイン設定 (ここを変えると雰囲気が変わります) ▼▼▼
+const STYLES = {
+  // 全体の文字色
+  textColor: '#ffffff',
+  // 配信者/視聴者の吹き出しの色 (少し透けた黒)
+  userBubbleBg: 'rgba(0, 0, 0, 0.6)',
+  // AIの吹き出しの色 (ネオンパープル～青のグラデーション)
+  aiBubbleBg: 'linear-gradient(135deg, #b000f0, #0048ff)',
+  // AIの光る影の色
+  aiGlowColor: 'rgba(120, 50, 255, 0.7)',
+};
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+// ポート番号は合わせてください
 const SOCKET_URL = 'http://localhost:3001';
 
 interface Comment {
@@ -9,98 +23,149 @@ interface Comment {
   name: string;
   text: string;
   avatar?: string;
+  gaya?: string; // AIのツッコミ
+  timestamp: number; // 表示時間管理用
 }
 
 export default function Overlay() {
   const [comments, setComments] = useState<Comment[]>([]);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 接続
     const socket = io(SOCKET_URL);
-    const timeouts: Map<string, NodeJS.Timeout> = new Map(); // タイマーを管理
 
-    socket.on('connect', () => {
-      console.log('Overlay Connected to Socket Server');
-    });
+    socket.on('connect', () => console.log('Overlay Connected!'));
 
     socket.on('new-comment', (comment: Comment) => {
-      console.log('Overlay Received:', comment);
-      
-      // 既存のタイマーがあればクリア
-      const existingTimeout = timeouts.get(comment.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-      
-      // コメントを追加
-      setComments((prev) => {
-        // 既に同じIDのコメントがあれば削除してから追加（重複防止）
-        const filtered = prev.filter(c => c.id !== comment.id);
-        return [...filtered, comment];
-      });
-      
-      // 15秒後に消す（タイマーを保存）
-      const timeoutId = setTimeout(() => {
-        setComments((current) => {
-          const filtered = current.filter(c => c.id !== comment.id);
-          // タイマーを削除
-          timeouts.delete(comment.id);
-          return filtered;
-        });
-      }, 15000); // 10秒から15秒に延長
-      
-      timeouts.set(comment.id, timeoutId);
+      // タイムスタンプを付与して追加
+      const newComment = { ...comment, timestamp: Date.now() };
+      setComments((prev) => [...prev, newComment].slice(-20)); // 最新20件だけ保持
     });
 
-    return () => {
-      // すべてのタイマーをクリア
-      timeouts.forEach((timeout) => clearTimeout(timeout));
-      timeouts.clear();
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, []);
 
+  // 新しいコメントが来たら自動スクロール
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
+
   return (
-    // 背景を透明にするためのスタイル
-    <div style={{ 
-      width: '100vw', 
-      height: '100vh', 
-      overflow: 'hidden',
-      padding: '20px',
-      background: 'transparent' // OBSではこれが重要
-    }}>
-      {comments.map((c, i) => (
-        <div key={c.id || i} style={{
-          background: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '10px 15px',
-          borderRadius: '20px',
-          marginBottom: '10px',
-          display: 'flex',
-          alignItems: 'center',
-          maxWidth: '80%',
-          animation: 'fadeIn 0.5s ease-out',
-          fontFamily: 'sans-serif',
-          fontWeight: 'bold',
-          fontSize: '24px', // OBS用に文字は大きめに
-          textShadow: '2px 2px 4px black'
-        }}>
-          {c.avatar && (
-            <img 
-              src={c.avatar} 
-              style={{ width: 40, height: 40, borderRadius: '50%', marginRight: 15 }} 
-            />
-          )}
-          <span>{c.text}</span>
+    <>
+      {/* ▼▼▼ CSSアニメーション定義 ▼▼▼ */}
+      <style>{`
+        /* 全体が左からスッと入ってくるアニメーション */
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-30px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        /* AIの吹き出しがポンッと飛び出すアニメーション */
+        @keyframes popIn {
+          0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+          80% { transform: scale(1.05); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        /* AIアイコンがゆっくり脈打つアニメーション */
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 ${STYLES.aiGlowColor}; }
+          70% { box-shadow: 0 0 10px 10px transparent; }
+          100% { box-shadow: 0 0 0 0 transparent; }
+        }
+      `}</style>
+
+      {/* ▼▼▼ メイン表示エリア ▼▼▼ */}
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        overflow: 'hidden', // スクロールバーを出さない
+        padding: '20px',
+        background: 'transparent', // OBSで背景を透過させるための重要設定
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end', // 下から積み上げる
+        color: STYLES.textColor,
+        fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {comments.map((c) => (
+            // コメントのペア（配信者発言 + AIツッコミ）のコンテナ
+            <div key={c.id} style={{
+              animation: 'slideInLeft 0.4s ease-out forwards',
+              maxWidth: '85%', // 画面幅いっぱいにしない
+            }}>
+              
+              {/* === 上段：配信者/視聴者のコメント === */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                marginBottom: c.gaya ? '4px' : '0', // AIツッコミがある時は少し隙間を空ける
+              }}>
+                {/* アバター */}
+                <img 
+                  src={c.avatar || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'} 
+                  style={{
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    marginRight: '12px', border: '2px solid rgba(255,255,255,0.2)'
+                  }}
+                />
+                {/* 名前と本文 */}
+                <div style={{
+                  background: STYLES.userBubbleBg,
+                  padding: '8px 14px',
+                  borderRadius: '18px',
+                  borderTopLeftRadius: '4px', // 吹き出しっぽく左上を尖らせる
+                  backdropFilter: 'blur(4px)', // すりガラス効果
+                }}>
+                  <div style={{ fontSize: '12px', color: '#ccc', marginBottom: '2px' }}>{c.name}</div>
+                  <div style={{ fontSize: '16px', lineHeight: '1.4' }}>{c.text}</div>
+                </div>
+              </div>
+
+              {/* === 下段：AIのツッコミ (Gaya) === */}
+              {c.gaya && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-start',
+                  marginLeft: '48px', // アバター分ずらす
+                  animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.3s both', // 0.3秒遅れて登場
+                }}>
+                  <div style={{
+                    background: STYLES.aiBubbleBg,
+                    padding: '10px 18px',
+                    borderRadius: '24px',
+                    borderTopLeftRadius: '0px', // 逆向きの吹き出し
+                    boxShadow: `0 4px 15px ${STYLES.aiGlowColor}`, // 光る影
+                    display: 'flex', alignItems: 'center',
+                    maxWidth: '100%',
+                    position: 'relative',
+                    border: '1px solid rgba(255,255,255,0.3)'
+                  }}>
+                    {/* AIアイコン */}
+                    <div style={{
+                      position: 'absolute', left: '-14px', top: '-14px',
+                      background: '#fff', borderRadius: '50%', padding: '4px',
+                      boxShadow: `0 0 10px ${STYLES.aiGlowColor}`,
+                      animation: 'pulse 2s infinite'
+                    }}>
+                      <span style={{ fontSize: '18px' }}>🤖</span>
+                    </div>
+                    
+                    {/* ツッコミ本文 */}
+                    <div style={{ 
+                      fontSize: '20px', // AIの声は少し大きく
+                      fontWeight: 'bold',
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                    }}>
+                      {c.gaya}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={commentsEndRef} /> {/* 自動スクロール用の見えない壁 */}
         </div>
-      ))}
-      
-      {/* デバッグ用：何もコメントがなくても文字が出るかテスト */}
-      {comments.length === 0 && (
-        <div style={{ color: 'red', fontSize: 20 }}>
-          待機中... (URL: {SOCKET_URL})
-        </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -200,6 +200,38 @@ export class ServerService {
   }
 
   /**
+   * Laravelからガヤ設定を取得
+   */
+  async getGayaSettings(): Promise<{ system_prompt?: string; character?: string; enabled?: boolean } | null> {
+    if (!this.status.serverUrl) {
+      return null
+    }
+
+    try {
+      const url = `${this.status.serverUrl}/api/prompts/gaya-settings`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000), // 5秒タイムアウト
+      })
+
+      if (!response.ok) {
+        console.warn(`[ServerService] Failed to fetch gaya settings: ${response.status}`)
+        return null
+      }
+
+      const data = await response.json()
+      console.log('[ServerService] Laravelからガヤ設定を取得:', data)
+      return data
+    } catch (error) {
+      console.error('[ServerService] ガヤ設定の取得に失敗:', error)
+      return null
+    }
+  }
+
+  /**
    * クリーンアップ
    */
   cleanup(): void {

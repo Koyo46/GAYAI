@@ -81,7 +81,33 @@ export class YoutubeService {
     });
 
     this.liveChat.on('error', (err) => {
-      console.error('❌ LiveChat error:', err);
+      // エラーの種類に応じてメッセージを分ける
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorCode = (err as any)?.response?.status || (err as any)?.statusCode || (err as any)?.code;
+      
+      if (errorCode === 503 || errorMessage.includes('503')) {
+        console.error('❌ YouTube Live Chat API が一時的に利用できません (503 Service Unavailable)');
+        console.error('   考えられる原因:');
+        console.error('   1. YouTube側の一時的な障害');
+        console.error('   2. レート制限に達している可能性');
+        console.error('   3. しばらく待ってから再試行してください');
+      } else if (errorCode === 429 || errorMessage.includes('429')) {
+        console.error('❌ YouTube Live Chat API のレート制限に達しました (429 Too Many Requests)');
+        console.error('   しばらく待ってから再試行してください');
+      } else if (errorCode === 403 || errorMessage.includes('403')) {
+        console.error('❌ YouTube Live Chat API へのアクセスが拒否されました (403 Forbidden)');
+        console.error('   APIキーまたは権限の問題の可能性があります');
+      } else {
+        console.error('❌ LiveChat error:', err);
+      }
+      
+      // メインウィンドウにエラー通知を送信（オプション）
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('youtube-error', {
+          code: errorCode,
+          message: errorMessage
+        });
+      }
     });
 
     this.liveChat.on('end', (reason) => {

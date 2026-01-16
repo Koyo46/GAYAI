@@ -12,6 +12,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run --no-coverage",
+    "test:integration": "vitest run --no-coverage tests/integration",
+    "test:performance": "vitest run --no-coverage tests/integration/audioToAiResponse.test.ts tests/integration/endToEnd.test.ts",
     "start": "electron-vite preview",
     "dev": "node -e \"if (process.platform === 'win32') { require('child_process').execSync('chcp 65001 >nul 2>&1', { stdio: 'ignore' }) }\" && electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

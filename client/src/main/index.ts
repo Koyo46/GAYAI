@@ -237,8 +237,18 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
   console.log(`🗣️ 認識結果: "${text}"`);
 
   // 2. ガヤ生成 (Gemini or GPT)
-  // Laravelから取得済みのキャラ設定があればそれを使う（簡易的に固定文言でテスト）
-  const systemPrompt = "あなたは配信者の友人です。配信者の独り言に対して、面白おかしく相槌やツッコミを配信にコメントする形で一言入れてください。";
+  // Laravelから取得済みのキャラ設定があればそれを使う
+  let systemPrompt = "あなたは配信者のチェアマンです。配信者の独り言に対して、冷静に分析し的確なアドバイスや豆知識を30～100文字ぐらいでコメントしてください。";
+  if (serverService) {
+    const gayaSettings = await serverService.getGayaSettings();
+    if (gayaSettings?.system_prompt) {
+      systemPrompt = gayaSettings.system_prompt;
+      console.log('📝 Laravelからプロンプトを取得:', systemPrompt);
+    } else {
+      console.log('⚠️ Laravelからプロンプトが取得できませんでした。デフォルト値を使用します。');
+    }
+  }
+  
   console.log('🧠 ガヤ生成中...');
   const gaya = await aiService.generateGaya(systemPrompt, text);
   console.log(`💬 ガヤ生成完了: "${gaya}"`);
