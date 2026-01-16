@@ -26,7 +26,7 @@ type AiProvider = 'openai' | 'gemini';
 
 const AI_COOLDOWN_MS = 600;
 const AI_REPLY_CHANCE = 1;
-const VAD_THRESHOLD = -55; // 音声検出の閾値（dB）。低いほど敏感
+const VAD_THRESHOLD = -65; // 音声検出の閾値（dB）。低いほど敏感（より敏感に変更）
 const VAD_INTERVAL_MS = 100; // 音量チェックの間隔（ms）
 const VAD_HISTORY = 10; // 音声検出の履歴（フレーム数）
 function Dashboard(): React.JSX.Element {

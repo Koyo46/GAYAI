@@ -400,7 +400,7 @@ ipcMain.handle('ai:process-audio', async (_event, _arrayBuffer: ArrayBuffer) => 
     console.log(`🎲 コメント順をランダム化: ${shuffledResults.map(r => r.personality.name).join(' → ')}`);
     
     // 4. 2秒間隔で順番に送信
-    const INTERVAL_MS = 2000; // 2秒間隔
+    const INTERVAL_MS = 3000; // 3秒間隔
     
     for (let i = 0; i < shuffledResults.length; i++) {
       const { personality, gaya } = shuffledResults[i];

@@ -32,12 +32,19 @@ interface Window {
     // 2. YouTube関連
     youtube: {
       start: (liveId: string) => Promise<{ success: boolean; error?: string }>
+      stop: () => Promise<{ success: boolean; error?: string }>
     }
 
     // 3. ★今回追加したAI関連
     ai: {
       saveSettings: (provider: 'openai' | 'gemini', apiKey: string) => Promise<boolean>
-      processAudio: (buffer: ArrayBuffer) => Promise<boolean>;
+      processAudio: (buffer: ArrayBuffer) => Promise<{ text: string; gaya: string } | null>
+    }
+
+    // 4. アプリ設定関連
+    app: {
+      getConfig: () => Promise<{ multiPersonalityMode: boolean }>
+      setConfig: (config: { multiPersonalityMode?: boolean }) => Promise<{ multiPersonalityMode: boolean }>
     }
   }
 }

@@ -22,11 +22,6 @@ export class AiService {
   // 人格定義（ローカル）
   private readonly personalities: Personality[] = [
     {
-      name: 'ツッコミ',
-      systemPrompt: 'あなたは配信者のツッコミ役です。配信者の独り言に対して、軽快で的確なツッコミを30～100文字で返してください。関西弁で話すことが多いです。',
-      avatarUrl: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png'
-    },
-    {
       name: '応援マン',
       systemPrompt: 'あなたは配信者の応援団です。配信者の独り言に対して、熱く応援するコメントを30～100文字で返してください。ポジティブで前向きな言葉を使います。',
       avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
@@ -37,8 +32,8 @@ export class AiService {
       avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png'
     },
     {
-      name: '毒舌',
-      systemPrompt: 'あなたは配信者の毒舌な友達です。配信者の独り言に対して、皮肉や毒舌を交えつつも愛のあるコメントを30～100文字で返してください。',
+      name: '甘々',
+      systemPrompt: 'あなたは配信者の甘々な友達です。配信者の独り言に対して、甘々で愛のあるコメントを30～100文字で返してください。',
       avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135789.png'
     },
     {
